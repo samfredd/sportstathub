@@ -1,0 +1,7 @@
+[submodule "graphify"]
+	path = graphify
+	url = https://github.com/safishamsi/graphify.git
+
+[submodule "oddswitch"]
+	path = oddswitch
+	url = https://github.com/whoami-pantheon/OddSwitch
