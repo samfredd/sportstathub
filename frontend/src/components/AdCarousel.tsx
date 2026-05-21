@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
+import { useUpgradeModal } from "@/context/UpgradeModalContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ export default function AdCarousel({
   const [direction, setDirection] = useState<1 | -1>(1);
   const timerRef                  = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartX               = useRef<number | null>(null);
+  const { openUpgradeModal }      = useUpgradeModal();
 
   const advance = useCallback((dir: 1 | -1 = 1) => {
     setDirection(dir);
@@ -273,6 +275,48 @@ export default function AdCarousel({
   const slideOutClass = leaving
     ? `opacity-0 ${direction === 1 ? "-translate-x-4" : "translate-x-4"}`
     : "opacity-100 translate-x-0";
+
+  const isPlansTrigger = (cta?: AdSlide["cta"]) => slide.type === "promo" && !cta?.external;
+  const openPlans = () => {
+    stopTimer();
+    openUpgradeModal();
+  };
+
+  const renderCta = (cta: AdSlide["cta"], className: string) => {
+    if (!cta) return null;
+
+    if (isPlansTrigger(cta)) {
+      return (
+        <button type="button" onClick={openPlans} className={className}>
+          {cta.label}
+        </button>
+      );
+    }
+
+    if (cta.external) {
+      return (
+        <a href={cta.href} target="_blank" rel="noopener noreferrer" className={className}>
+          {cta.label}
+        </a>
+      );
+    }
+
+    return (
+      <Link href={cta.href} className={className}>
+        {cta.label}
+      </Link>
+    );
+  };
+
+  const renderLabel = (label: string, className: string) => {
+    if (slide.type !== "promo") return <span className={className}>{label}</span>;
+
+    return (
+      <button type="button" onClick={openPlans} className={`${className} cursor-pointer hover:opacity-80 transition-opacity`}>
+        {label}
+      </button>
+    );
+  };
 
   // ── DOT NAV shared ────────────────────────────────────────────────────────
   const Dots = ({ centered = false }: { centered?: boolean }) => (
@@ -357,11 +401,7 @@ export default function AdCarousel({
                 </h1>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {slide.cta && (slide.cta.external ? (
-                    <a href={slide.cta.href} target="_blank" rel="noopener noreferrer" className="btn-gradient text-[12px] px-4 py-2 sm:px-5 sm:py-2.5">{slide.cta.label}</a>
-                  ) : (
-                    <Link href={slide.cta.href} className="btn-gradient text-[12px] px-4 py-2 sm:px-5 sm:py-2.5">{slide.cta.label}</Link>
-                  ))}
+                  {renderCta(slide.cta, "btn-gradient text-[12px] px-4 py-2 sm:px-5 sm:py-2.5")}
                   {slide.cta2 && (
                     <Link href={slide.cta2.href} className="px-3 py-2 sm:px-4 sm:py-2.5 bg-surface border border-border/60 text-muted hover:text-foreground hover:border-accent/30 rounded-xl text-[12px] font-black transition-all">
                       {slide.cta2.label}
@@ -373,9 +413,7 @@ export default function AdCarousel({
               {/* Right: label chip + dots (desktop) */}
               <div className="hidden lg:flex flex-col items-end gap-3 shrink-0 self-end pb-1">
                 {slide.label && (
-                  <span className={`text-[9px] font-black uppercase tracking-[0.25em] px-2 py-1 rounded-lg border ${accentText} ${accentBg}/15 ${accentBorder}/25`}>
-                    {slide.label}
-                  </span>
+                  renderLabel(slide.label, `text-[9px] font-black uppercase tracking-[0.25em] px-2 py-1 rounded-lg border ${accentText} ${accentBg}/15 ${accentBorder}/25`)
                 )}
                 <Dots />
               </div>
@@ -444,12 +482,7 @@ export default function AdCarousel({
               {slide.body && <p className="text-[11px] text-muted leading-snug">{slide.body}</p>}
             </div>
             {slide.cta && (
-              <Link
-                href={slide.cta.href}
-                className={`w-full flex items-center justify-center mt-3 py-2 rounded-lg text-[12px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`}
-              >
-                {slide.cta.label}
-              </Link>
+              renderCta(slide.cta, `w-full flex items-center justify-center mt-3 py-2 rounded-lg text-[12px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`)
             )}
           </div>
         ) : (
@@ -467,12 +500,7 @@ export default function AdCarousel({
               {slide.body && <p className="text-[10px] text-muted leading-snug">{slide.body}</p>}
             </div>
             {slide.cta && (
-              <Link
-                href={slide.cta.href}
-                className={`w-full flex items-center justify-center mt-2.5 py-1.5 rounded-lg text-[11px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`}
-              >
-                {slide.cta.label}
-              </Link>
+              renderCta(slide.cta, `w-full flex items-center justify-center mt-2.5 py-1.5 rounded-lg text-[11px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`)
             )}
           </div>
         )}
@@ -514,9 +542,7 @@ export default function AdCarousel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             {slide.label && (
-              <span className={`text-[8px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30`}>
-                {slide.label}
-              </span>
+              renderLabel(slide.label, `text-[8px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30`)
             )}
             {slide.eyebrow && <span className="text-[9px] text-muted font-bold truncate">{slide.eyebrow}</span>}
           </div>
@@ -525,12 +551,7 @@ export default function AdCarousel({
         </div>
 
         {slide.cta && (
-          <Link
-            href={slide.cta.href}
-            className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${accentText} ${accentBg}/15 ${accentBorder}/25 hover:${accentBg}/25`}
-          >
-            {slide.cta.label}
-          </Link>
+          renderCta(slide.cta, `shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${accentText} ${accentBg}/15 ${accentBorder}/25 hover:${accentBg}/25`)
         )}
       </div>
 
