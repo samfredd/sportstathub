@@ -1,0 +1,36 @@
+This document describes the end‑to‑end workflow for the AI Predict module. The goal is to provide transparent, responsible and continually improving predictions for sports events across multiple disciplines. The workflow is broken down into phases and includes guidelines for data handling, model training, evaluation and deployment.
+1. Data Acquisition
+Trusted sources – Collect data from reputable sports data providers (e.g., Opta, Sportradar, Stats Perform) and official league feeds. Validate that each provider has permission to redistribute data and that terms of use allow predictive modelling.
+Wide coverage – Acquire data across all supported sports, including match results, player statistics, team form, injuries, weather conditions, referee assignments and betting odds. For each sport, identify the features that historically correlate with outcomes (e.g., possession and xG for football, pace and offensive efficiency for basketball).
+Frequency and latency – Ingest live data with latency under one minute for in‑play updates, and schedule batch imports of historical data on a nightly basis. Use an ETL pipeline that logs ingestion events, handles API rate limits and fails gracefully.
+Data governance – Store raw data in an immutable data lake, maintain metadata (source, timestamp, reliability) and implement access controls. Sensitive data (e.g., personal information) should be excluded or anonymised to comply with privacy regulations.
+2. Data Pre‑processing and Feature Engineering
+Cleaning and validation – Remove duplicates, correct obvious anomalies and handle missing values. Use cross‑provider reconciliation to resolve conflicting data points. Flag outliers for manual review.
+Feature engineering – Create derived metrics appropriate for each sport. Examples include expected goals (xG), rolling averages of points scored, form streaks, pace factors and injury impacts. Normalise features (e.g., scale to [0,1]) and encode categorical variables (e.g., team, player, surface) as numerical vectors.
+Label definition – For classification tasks (win/draw/lose), assign labels based on final score. For regression tasks (total points, correct score), use numeric outcomes. Ensure that labels are defined consistently across data sources.
+Dataset splits – Split the cleaned dataset into training (70 %), validation (15 %) and test (15 %) sets. Use time‑based splitting to prevent data leakage: historical matches should not have access to future information.
+3. Model Training
+Algorithm selection – Evaluate multiple model types: logistic regression, Poisson regression, gradient boosting (XGBoost, LightGBM), random forests and neural networks. Simpler models provide interpretability; ensemble methods often offer higher accuracy. For player prop markets or complex interactions, consider neural networks.
+Hyperparameter optimisation – Use cross‑validation on the training set to tune hyperparameters. Employ techniques such as grid search or Bayesian optimisation. Guard against overfitting by monitoring performance on the validation set.
+Sports‑specific models – Build separate models per sport and per market. Football predictions for win/draw/lose may use Poisson distributions for goals, whereas basketball totals may be modelled via regression on pace and offensive efficiency. Document the rationale for each model selection.
+Regular retraining – Schedule periodic retraining (e.g., weekly or monthly) to incorporate new data. Use incremental learning where possible to reduce computational costs.
+4. Model Evaluation
+Metrics – Choose evaluation metrics relevant to each market. For classification: accuracy, precision, recall, F1‑score and Brier score (for probability calibration). For regression: mean absolute error (MAE) and root mean square error (RMSE). Report calibration curves to ensure that predicted probabilities align with observed frequencies.
+Back‑testing – Simulate bets on historical data using the model’s predictions and compare returns to baselines (e.g., bookmaker odds or random selection). Use Kelly criterion to evaluate bankroll growth and risk.
+Fairness and bias – Analyse whether the model systematically favours or penalises certain teams, players or leagues. Check for biases due to incomplete data or skewed training samples. If discovered, adjust sampling or introduce fairness constraints.
+Human validation – Present predictions and underlying reasons to a panel of domain experts (pundits and statisticians). Collect qualitative feedback to identify spurious correlations or unrealistic outputs.
+5. Prediction Generation and Explainability
+Probability outputs – The API returns a probability distribution over possible outcomes (e.g., home win, draw, away win) along with a recommended pick and confidence level. For totals or handicaps, provide predicted totals and distributions.
+Reason codes – Each prediction includes the key drivers behind the model’s decision: recent form, head‑to‑head dominance, injuries, weather, referee strictness, etc. This transparency builds trust and helps users understand when and why a pick is recommended.
+Responsible usage – Include a disclaimer reminding users that predictions are suggestions and not guarantees. Encourage responsible betting and warn against chasing losses.
+6. Deployment and Inference
+Microservice architecture – Deploy the AI models as stateless microservices accessible via REST or GraphQL APIs. Use containerization (Docker) and orchestrate with Kubernetes or serverless functions for scalability.
+Latency requirements – Aim for sub‑second inference latency to support real‑time recommendations. Cache frequently requested predictions (e.g., popular matches) to reduce compute load.
+Versioning and rollback – Tag each model release and maintain versioned endpoints (e.g., /v1/football/wdl). Implement A/B testing or shadow deployments to evaluate new models without affecting all users. Provide rollback capabilities in case of degraded performance.
+Monitoring – Track inference latency, error rates, and model performance metrics in production. Compare real‑world outcomes to predicted probabilities to detect drift. Alert the data science team when performance falls below thresholds.
+7. Continuous Improvement
+Feedback loop – Collect data on user interactions (which predictions they follow, outcomes of posted bets) to refine models. Use this feedback to adjust feature weights or incorporate new variables (e.g., betting market sentiment).
+Feature expansion – Explore additional data sources (social media sentiment, player morale, fatigue) and incorporate them if they demonstrably improve predictive power without violating privacy rules.
+Ethical guidelines – Avoid using sensitive personal data (e.g., race, nationality) in training models. Adhere to responsible AI principles: fairness, transparency, accountability and privacy. Provide clear documentation of data sources and modelling techniques.
+User education – Publish explainers and confidence intervals to help users interpret predictions. Encourage users to use the game stats explorer and not rely solely on AI picks. Reinforce responsible gambling practices.
+By following these workflow rules, the AI Predict module will remain robust, explainable and fair while continuously improving its accuracy over time.

@@ -1,0 +1,24 @@
+[Unit]
+Description=OddSwitch Celery Worker — Translation Pipeline
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/project/oddswitch
+EnvironmentFile=/var/www/project/oddswitch/.env
+ExecStart=/var/www/project/oddswitch/venv/bin/celery \
+    -A app.workers.celery_app worker \
+    -Q translation \
+    --concurrency=2 \
+    --loglevel=info \
+    --logfile=/var/log/oddswitch/celery-translate.log
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=oddswitch-celery-translate
+
+[Install]
+WantedBy=multi-user.target
