@@ -224,7 +224,10 @@ export default function SubscriptionPage() {
           )}
 
           {!loading && upgradePlans.length === 0 && currentPlan === "free" && (
-            <StaticPlanCard name="Pro" price="$9.99/mo" highlight features={["Unlimited predictions", "Full statistics", "All booking codes", "H2H analyser", "Priority support", "Ad-free experience"]} />
+            <div className="glass rounded-2xl p-6 border border-border/30">
+              <p className="text-[11px] font-black text-muted uppercase tracking-widest mb-2">Upgrade Options</p>
+              <p className="text-sm text-muted font-medium">No active paid plans are available right now.</p>
+            </div>
           )}
 
           {loading && (
@@ -234,30 +237,6 @@ export default function SubscriptionPage() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StaticPlanCard({ name, price, features, highlight = false }: { name: string; price: string; features: string[]; highlight?: boolean }) {
-  return (
-    <div className={`glass rounded-2xl p-5 border ${highlight ? "border-accent/30 bg-accent/5" : "border-border/30"}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="font-black text-foreground">{name}</p>
-          <p className="text-sm text-muted mt-0.5">Cancel anytime</p>
-        </div>
-        <p className="text-xl font-black text-accent">{price}</p>
-      </div>
-      <ul className="space-y-1.5 mb-4">
-        {features.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-sm text-foreground font-medium">
-            <span className="text-emerald-400">✓</span> {f}
-          </li>
-        ))}
-      </ul>
-      <button className="w-full py-2.5 rounded-xl text-sm font-black text-white transition-all hover:-translate-y-0.5" style={{ background: highlight ? "var(--accent-gradient)" : "rgba(255,255,255,0.07)" }}>
-        Upgrade to {name} →
-      </button>
     </div>
   );
 }

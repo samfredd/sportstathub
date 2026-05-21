@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { communityApi } from "@/lib/communityApi";
 
-export type Plan = "free" | "pro" | null;
+export type Plan = string | null;
 
 export interface SubscriptionState {
   plan: Plan;
   status: string | null;
   expiresAt: string | null;
   loading: boolean;
-  /** true if user has an active pro plan */
+  /** true if user has an active paid plan */
   isPro: boolean;
   /** true if user is on the free tier (or not logged in) */
   isFree: boolean;
@@ -49,9 +49,10 @@ export function useSubscription(): SubscriptionState {
         const expiresAt = profile.subscription_expires_at ?? null;
         const isAdmin = profile.role === "admin";
         const isActive = status === "active" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
-        const isPro = isAdmin || (isActive && plan === "pro");
+        const isPaidPlan = !!plan && plan !== "free";
+        const isPro = isAdmin || (isActive && isPaidPlan);
         setState({
-          plan: (plan === "pro" ? "pro" : "free") as Plan,
+          plan,
           status,
           expiresAt,
           loading: false,

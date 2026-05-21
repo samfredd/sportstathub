@@ -14,6 +14,30 @@ MODEL="${OLLAMA_MODEL:-qwen2.5:1.5b}"
 
 cd "$APP_DIR"
 
+if [[ -f "${APP_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${APP_DIR}/.env"
+  set +a
+fi
+
+DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
+ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
+export DOMAIN ACME_EMAIL
+
+missing=()
+for var in DOMAIN ACME_EMAIL DB_PASSWORD REDIS_PASSWORD SECRET_KEY ADMIN_INVITE_KEY; do
+  if [[ -z "${!var:-}" ]]; then
+    missing+=("$var")
+  fi
+done
+
+if (( ${#missing[@]} > 0 )); then
+  echo "ERROR: Missing required deployment env vars: ${missing[*]}" >&2
+  echo "Set them in ${APP_DIR}/.env or pass them from the deployment workflow." >&2
+  exit 1
+fi
+
 echo "════════════════════════════════════════"
 echo "  Deploying $(git log -1 --format='%h %s')"
 echo "════════════════════════════════════════"
@@ -53,12 +77,21 @@ bash "${APP_DIR}/scripts/pull-ollama-model.sh" "$MODEL"
 # ── Health check ─────────────────────────────────────────────────────────────
 echo "▶  Health check"
 sleep 5
-if curl -sf --max-time 10 "http://localhost/health" > /dev/null 2>&1 || \
-   curl -sfk --max-time 10 "https://localhost/health" > /dev/null 2>&1; then
+if curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/health" > /dev/null; then
   echo "  ✓ Backend is healthy"
 else
-  echo "  ✗ Health check failed — checking logs:"
+  echo "  ✗ Backend health check failed — checking logs:"
+  $COMPOSE logs --tail=30 traefik
   $COMPOSE logs --tail=30 backend
+  exit 1
+fi
+
+if curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" > /dev/null; then
+  echo "  ✓ Frontend is reachable"
+else
+  echo "  ✗ Frontend health check failed — checking logs:"
+  $COMPOSE logs --tail=30 traefik
+  $COMPOSE logs --tail=30 frontend
   exit 1
 fi
 

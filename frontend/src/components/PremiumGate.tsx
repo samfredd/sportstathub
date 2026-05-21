@@ -22,6 +22,17 @@ interface PremiumGateProps {
   flagKey?: string;
 }
 
+const PLAN_RANK: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  enterprise: 2,
+};
+
+function planRank(plan?: string | null) {
+  if (!plan) return 0;
+  return PLAN_RANK[plan] ?? 1;
+}
+
 export default function PremiumGate({
   children,
   feature,
@@ -29,7 +40,7 @@ export default function PremiumGate({
   inline = false,
   flagKey,
 }: PremiumGateProps) {
-  const { isPro, loading: subLoading } = useSubscription();
+  const { isPro, isAdmin, plan, loading: subLoading } = useSubscription();
   const { flags, loading: flagsLoading } = useFeatureFlags();
   const { openUpgradeModal } = useUpgradeModal();
   const didAutoOpen = useRef(false);
@@ -46,14 +57,14 @@ export default function PremiumGate({
         if (!flag.is_enabled || flag.required_plan === "free") {
           hasAccess = true;
         } else {
-          hasAccess = isPro;
+          hasAccess = isAdmin || (isPro && planRank(plan) >= planRank(flag.required_plan));
         }
       } else {
         // Flag not in DB → fail closed → require pro
-        hasAccess = isPro;
+        hasAccess = isAdmin || (isPro && planRank(plan) >= planRank("pro"));
       }
     } else {
-      hasAccess = isPro;
+      hasAccess = isAdmin || (isPro && planRank(plan) >= planRank("pro"));
     }
   }
 
