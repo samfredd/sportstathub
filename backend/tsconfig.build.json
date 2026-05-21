@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server.ts",
+    "migrate.ts",
+    "seed-admin.ts",
+    "verify_test_user.ts",
+    "src/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "test"]
+}

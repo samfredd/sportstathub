@@ -1,0 +1,145 @@
+// ─── Shared ─────────────────────────────────────────────────
+const paginationQuery = {
+  type: 'object',
+  properties: {
+    page:    { type: 'integer', minimum: 1, default: 1 },
+    limit:   { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    search:  { type: 'string', default: '' },
+  },
+};
+
+const idParam = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'integer' } },
+};
+
+// ─── Users ───────────────────────────────────────────────────
+export const usersQuerySchema    = paginationQuery;
+export const userParamSchema     = idParam;
+
+export const updateUserSchema = {
+  type: 'object',
+  properties: {
+    role:        { type: 'string', enum: ['user', 'creator', 'admin'] },
+    is_verified: { type: 'boolean' },
+    status:      { type: 'string', enum: ['active', 'suspended', 'banned'] },
+  },
+  additionalProperties: false,
+};
+
+// ─── Booking Codes ────────────────────────────────────────────
+export const adminCodesQuerySchema = {
+  ...paginationQuery,
+  properties: {
+    ...paginationQuery.properties,
+    includeInactive: { type: 'boolean', default: true },
+  },
+};
+
+export const adminCreateCodeSchema = {
+  type: 'object',
+  required: ['code', 'bookmaker'],
+  properties: {
+    code:        { type: 'string', minLength: 1, maxLength: 100 },
+    bookmaker:   { type: 'string', minLength: 1, maxLength: 100 },
+    description: { type: 'string' },
+    totalOdds:   { type: 'number' },
+    stakeType:   { type: 'string', maxLength: 50 },
+    category:    { type: 'string', maxLength: 50 },
+    expiresAt:   { type: 'string', format: 'date-time', nullable: true },
+    userId:      { type: 'integer', nullable: true },
+  },
+  additionalProperties: false,
+};
+
+export const adminUpdateCodeSchema = {
+  type: 'object',
+  properties: {
+    code:        { type: 'string', minLength: 1, maxLength: 100 },
+    bookmaker:   { type: 'string', minLength: 1, maxLength: 100 },
+    description: { type: 'string' },
+    totalOdds:   { type: 'number' },
+    stakeType:   { type: 'string', maxLength: 50 },
+    category:    { type: 'string', maxLength: 50 },
+    isActive:    { type: 'boolean' },
+    expiresAt:   { type: 'string', format: 'date-time', nullable: true },
+  },
+  additionalProperties: false,
+};
+
+// ─── Admin Profile ────────────────────────────────────────────
+export const changePasswordSchema = {
+  type: 'object',
+  required: ['currentPassword', 'newPassword'],
+  properties: {
+    currentPassword: { type: 'string', minLength: 1 },
+    newPassword:     { type: 'string', minLength: 8 },
+  },
+  additionalProperties: false,
+};
+
+// ─── Subscription Plans ───────────────────────────────────────
+export const createPlanSchema = {
+  type: 'object',
+  required: ['slug', 'displayName'],
+  properties: {
+    slug:          { type: 'string', minLength: 1, maxLength: 50 },
+    displayName:   { type: 'string', minLength: 1, maxLength: 100 },
+    description:   { type: 'string', nullable: true },
+    priceMonthly:  { type: 'number', minimum: 0 },
+    priceYearly:   { type: 'number', minimum: 0 },
+    currency:      { type: 'string', maxLength: 10 },
+    features:      { type: 'array', items: { type: 'string' } },
+    limits:        { type: 'object' },
+    isActive:      { type: 'boolean' },
+    isPopular:     { type: 'boolean' },
+    sortOrder:     { type: 'integer' },
+  },
+  additionalProperties: false,
+};
+
+export const updatePlanSchema = {
+  type: 'object',
+  properties: {
+    displayName:   { type: 'string', minLength: 1, maxLength: 100 },
+    description:   { type: 'string', nullable: true },
+    priceMonthly:  { type: 'number', minimum: 0 },
+    priceYearly:   { type: 'number', minimum: 0 },
+    currency:      { type: 'string', maxLength: 10 },
+    features:      { type: 'array', items: { type: 'string' } },
+    limits:        { type: 'object' },
+    isActive:      { type: 'boolean' },
+    isPopular:     { type: 'boolean' },
+    sortOrder:     { type: 'integer' },
+  },
+  additionalProperties: false,
+};
+
+// ─── Subscriptions ────────────────────────────────────────────
+export const subscriptionsQuerySchema = paginationQuery;
+export const subscriptionParamSchema  = idParam;
+
+export const createSubscriptionSchema = {
+  type: 'object',
+  required: ['userId', 'plan'],
+  properties: {
+    userId:    { type: 'integer' },
+    plan:      { type: 'string', enum: ['free', 'pro', 'enterprise'] },
+    status:    { type: 'string', enum: ['active', 'cancelled', 'expired', 'pending', 'failed'], default: 'active' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    notes:     { type: 'string', nullable: true },
+  },
+  additionalProperties: false,
+};
+
+export const updateSubscriptionSchema = {
+  type: 'object',
+  properties: {
+    plan:      { type: 'string', enum: ['free', 'pro', 'enterprise'] },
+    status:    { type: 'string', enum: ['active', 'cancelled', 'expired', 'pending', 'failed'] },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    notes:     { type: 'string', nullable: true },
+  },
+  additionalProperties: false,
+};
