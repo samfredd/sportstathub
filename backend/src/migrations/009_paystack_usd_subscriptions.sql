@@ -26,17 +26,9 @@ VALUES
     true, false, 2
   )
 ON CONFLICT (slug) DO UPDATE
-SET display_name = EXCLUDED.display_name,
-    description = EXCLUDED.description,
-    price_monthly = EXCLUDED.price_monthly,
-    price_yearly = EXCLUDED.price_yearly,
-    currency = EXCLUDED.currency,
-    features = EXCLUDED.features,
-    limits = EXCLUDED.limits,
-    is_active = EXCLUDED.is_active,
-    is_popular = EXCLUDED.is_popular,
-    sort_order = EXCLUDED.sort_order,
-    updated_at = NOW();
+SET currency = 'USD',
+    updated_at = NOW()
+WHERE subscription_plans.currency <> 'USD';
 
 CREATE TABLE IF NOT EXISTS payment_transactions (
   id                SERIAL PRIMARY KEY,

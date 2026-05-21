@@ -131,7 +131,7 @@ function PackagesTab({ showToast }: { showToast: (m: string, t?: string) => void
       description: planForm.description || null,
       priceMonthly: Number(planForm.price_monthly),
       priceYearly: Number(planForm.price_yearly),
-      currency: planForm.currency,
+      currency: "USD",
       features,
       limits: planForm.limits,
       isActive: planForm.is_active,
@@ -366,18 +366,20 @@ function PlanForm({ form, setForm, featuresText, setFeaturesText, onSubmit, onCa
         <input type="text" value={form.description ?? ""} onChange={(e) => setField("description", e.target.value)} placeholder="Short description" className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all" />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Price / Month</label>
+          <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Price / Month (USD)</label>
           <input type="number" min={0} value={form.price_monthly} onChange={(e) => setField("price_monthly", e.target.value)} className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all" />
         </div>
         <div>
-          <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Price / Year</label>
+          <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Price / Year (USD)</label>
           <input type="number" min={0} value={form.price_yearly} onChange={(e) => setField("price_yearly", e.target.value)} className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all" />
         </div>
         <div>
           <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Currency</label>
-          <input type="text" value={form.currency} onChange={(e) => setField("currency", e.target.value)} className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all" />
+          <div className="w-full glass px-3 py-2.5 rounded-xl text-sm font-black text-foreground border border-border/40 bg-surface/40">
+            USD
+          </div>
         </div>
       </div>
 

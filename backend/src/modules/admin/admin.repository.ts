@@ -265,14 +265,14 @@ export function createAdminRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, currency, features, limits, isActive, isPopular, sortOrder }) {
+  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, features, limits, isActive, isPopular, sortOrder }) {
     const { rows } = await db.query(
       `INSERT INTO subscription_plans
          (slug, display_name, description, price_monthly, price_yearly, currency, features, limits, is_active, is_popular, sort_order)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [slug, displayName, description ?? null, priceMonthly ?? 0, priceYearly ?? 0,
-       currency ?? 'USD', JSON.stringify(features ?? []), JSON.stringify(limits ?? {}),
+       'USD', JSON.stringify(features ?? []), JSON.stringify(limits ?? {}),
        isActive ?? true, isPopular ?? false, sortOrder ?? 0]
     );
     return rows[0];
@@ -285,13 +285,15 @@ export function createAdminRepository(db) {
     const map: Record<string, string> = {
       displayName: 'display_name', description: 'description',
       priceMonthly: 'price_monthly', priceYearly: 'price_yearly',
-      currency: 'currency', isActive: 'is_active', isPopular: 'is_popular', sortOrder: 'sort_order',
+      isActive: 'is_active', isPopular: 'is_popular', sortOrder: 'sort_order',
     };
     for (const [key, col] of Object.entries(map)) {
       if (payload[key] !== undefined) { fields.push(`${col} = $${i++}`); values.push(payload[key]); }
     }
     if (payload.features !== undefined) { fields.push(`features = $${i++}`); values.push(JSON.stringify(payload.features)); }
     if (payload.limits   !== undefined) { fields.push(`limits = $${i++}`);   values.push(JSON.stringify(payload.limits)); }
+    fields.push(`currency = $${i++}`);
+    values.push('USD');
     if (!fields.length) return null;
     values.push(id);
     const { rows } = await db.query(
