@@ -197,6 +197,7 @@ jobs:
     outputs:
       image_namespace: ${{ steps.image.outputs.image_namespace }}
       production_domain: ${{ steps.domain.outputs.production_domain }}
+      frontend_api_url: ${{ steps.domain.outputs.frontend_api_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -205,18 +206,29 @@ jobs:
         id: image
         run: echo "image_namespace=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve production domain
+      - name: Resolve frontend API URL
         id: domain
         env:
           INPUT_DOMAIN: ${{ inputs.production_domain }}
           VARIABLE_DOMAIN: ${{ vars.PRODUCTION_DOMAIN }}
+          FALLBACK_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
+          DEPLOY_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy }}
         run: |
           DOMAIN="${INPUT_DOMAIN:-$VARIABLE_DOMAIN}"
-          if [ -z "$DOMAIN" ]; then
-            echo "PRODUCTION_DOMAIN repository variable or workflow input is required for production image builds." >&2
+          if [ -n "$DOMAIN" ]; then
+            API_URL="$DOMAIN"
+            case "$API_URL" in
+              http://*|https://*) ;;
+              *) API_URL="https://$API_URL" ;;
+            esac
+          elif [ "$DEPLOY_REQUESTED" = "true" ]; then
+            echo "PRODUCTION_DOMAIN repository variable or workflow input is required when deploy=true." >&2
             exit 1
+          else
+            API_URL="$FALLBACK_API_URL"
           fi
           echo "production_domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "frontend_api_url=$API_URL" >> "$GITHUB_OUTPUT"
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -243,7 +255,7 @@ jobs:
           context: ./frontend
           push: true
           build-args: |
-            NEXT_PUBLIC_API_URL=https://${{ steps.domain.outputs.production_domain }}
+            NEXT_PUBLIC_API_URL=${{ steps.domain.outputs.frontend_api_url }}
           tags: |
             ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/frontend:${{ env.IMAGE_TAG }}
             ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/frontend:latest
