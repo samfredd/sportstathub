@@ -1,0 +1,326 @@
+================================================================================
+  OddSwitch Engine — Docker Setup & Full Pipeline Instructions
+================================================================================
+
+This file contains everything needed to set up Docker services and run
+the full translation pipeline. Written 2026-04-28 to enable handoff.
+
+================================================================================
+  ARCHITECTURE OVERVIEW
+================================================================================
+
+The system has 5 components:
+
+  1. PostgreSQL (database)      — Stores jobs, slips, team aliases, market mappings
+  2. Redis (cache/broker)       — Caching, Celery message broker, job status
+  3. API Service (FastAPI)      — REST API endpoints, job creation
+  4. Translation Worker (Celery)— Runs the 10-step pipeline (normalize/match/translate)
+  5. Browser Worker (Celery)    — Playwright browser automation (extract/generate)
+
+Docker services: postgres, redis, api, worker, browser-worker
+Files: docker-compose.yml, Dockerfile.api, Dockerfile.worker, Dockerfile.browser
+
+================================================================================
+  PREREQUISITES
+================================================================================
+
+1. Docker & Docker Compose installed
+2. System Chrome installed (required for Bet9ja — see below)
+3. Python 3.11+ (for local dev/testing)
+4. Xvfb (for headless browser on servers: apt install xvfb)
+
+System Chrome install (Ubuntu/Debian):
+  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+  echo "deb [signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+  sudo apt update && sudo apt install -y google-chrome-stable
+
+================================================================================
+  STEP 1: SET UP ENVIRONMENT
+================================================================================
+
+# Copy the example env file
+cp .env.example .env
+
+# Edit .env with production values:
+#   DATABASE_URL=postgresql+asyncpg://oddswitch:STRONG_PASSWORD@localhost:5432/oddswitch
+#   REDIS_URL=redis://localhost:6379/0
+#   CELERY_BROKER_URL=redis://localhost:6379/1
+#   CELERY_RESULT_BACKEND=redis://localhost:6379/2
+#   LOG_FORMAT=json
+#   LOG_LEVEL=INFO
+#   DEBUG=false
+
+# For production, generate a strong Postgres password:
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+
+================================================================================
+  STEP 2: START DOCKER SERVICES (Postgres + Redis only)
+================================================================================
+
+For local development, you only need Postgres and Redis as Docker containers.
+The API, workers, and browser can run directly on your machine.
+
+# Start just Postgres and Redis:
+docker compose up -d postgres redis
+
+# Wait for them to be healthy:
+docker compose ps
+
+# You should see:
+#   oddswitch-postgres   ... (healthy)
+#   oddswitch-redis      ... (healthy)
+
+# Test connectivity:
+docker exec oddswitch-postgres pg_isready -U oddswitch
+docker exec oddswitch-redis redis-cli ping
+
+================================================================================
+  STEP 3: SET UP PYTHON ENVIRONMENT
+================================================================================
+
+# Create venv (if not already done):
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install all dependencies:
+pip install -r requirements/base.txt
+pip install -r requirements/api.txt
+pip install -r requirements/browser.txt
+pip install -r requirements/dev.txt
+
+# Install Playwright browsers:
+playwright install chromium
+
+================================================================================
+  STEP 4: RUN DATABASE MIGRATIONS
+================================================================================
+
+# The DB schema is managed by Alembic.
+# Run migrations to create all tables:
+alembic upgrade head
+
+# This creates:
+#   - translation_jobs     — Job queue and status tracking
+#   - canonical_slips      — Normalized slip storage (deduplicated by hash)
+#   - team_aliases         — Cross-bookmaker team name mappings
+#   - event_mappings       — Cross-bookmaker event mappings
+#   - market_mappings      — Cross-bookmaker market name mappings
+#   - api_keys             — API key management
+
+# To verify tables exist:
+docker exec oddswitch-postgres psql -U oddswitch -d oddswitch -c "\dt"
+
+================================================================================
+  STEP 5: SEED API KEYS
+================================================================================
+
+# You need at least one API key to use the REST API.
+# Connect to Postgres and insert one:
+
+docker exec -it oddswitch-postgres psql -U oddswitch -d oddswitch
+
+-- In the psql prompt:
+INSERT INTO api_keys (id, key_hash, name, is_active)
+VALUES (
+  'key_01',
+  encode(sha256('your-api-key-here'::bytea), 'hex'),
+  'dev-key',
+  true
+);
+
+-- Or for testing, the system accepts 'dev-key-123' by default in debug mode.
+
+================================================================================
+  STEP 6: START THE API SERVER
+================================================================================
+
+# Option A: Direct (for development)
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Option B: Via Docker
+docker compose up -d api
+
+# Test it:
+curl http://localhost:8000/health
+# Should return: {"status":"ok", ...}
+
+================================================================================
+  STEP 7: START THE CELERY WORKERS
+================================================================================
+
+# You need TWO Celery workers:
+#   1. Translation worker — handles normalization, matching, translation
+#   2. Browser worker — handles Playwright browser automation
+
+# Terminal 1 — Translation Worker:
+source .venv/bin/activate
+celery -A app.queue.celery_app worker --loglevel=info --queues=default --concurrency=4
+
+# Terminal 2 — Browser Worker (needs Xvfb on headless servers):
+source .venv/bin/activate
+xvfb-run --auto-servernum celery -A app.queue.celery_app worker --loglevel=info --queues=browser --concurrency=2 --prefetch-multiplier=1
+
+# Or via Docker:
+docker compose up -d worker browser-worker
+
+================================================================================
+  STEP 8: TEST THE FULL PIPELINE
+================================================================================
+
+# Submit a translation job via the API:
+
+curl -X POST http://localhost:8000/api/v1/translate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-123" \
+  -d '{
+    "source_bookmaker": "bet9ja",
+    "target_bookmaker": "sportybet",
+    "booking_code": "5CJJLLH"
+  }'
+
+# Response will include a job_id:
+# {"job_id": "01HXY...", "status": "pending"}
+
+# Check job status:
+curl http://localhost:8000/api/v1/jobs/{job_id} \
+  -H "X-API-Key: dev-key-123"
+
+# When completed, the response includes:
+# {
+#   "status": "completed",
+#   "result": {
+#     "translated_code": "ABC123",
+#     "confidence": 0.9,
+#     "legs": [...]
+#   }
+# }
+
+================================================================================
+  STEP 9 (OPTIONAL): RUN WITHOUT DOCKER — STANDALONE TEST
+================================================================================
+
+# The conversion pipeline can be tested WITHOUT Postgres/Redis.
+# This bypasses the API and runs extraction + normalization directly:
+
+source .venv/bin/activate
+xvfb-run --auto-servernum python scripts/test_conversion_pipeline.py 5CJJLLH
+
+# This runs Steps 1-6 (Extract → Normalize → Match → Translate → Score → Rebuild)
+# without needing any Docker services.
+
+# For just testing Bet9ja extraction:
+xvfb-run --auto-servernum python scripts/test_bet9ja_final.py
+
+================================================================================
+  FULL DOCKER DEPLOYMENT (ALL SERVICES)
+================================================================================
+
+# Build and start everything:
+docker compose build
+docker compose up -d
+
+# Run migrations inside the API container:
+docker compose exec api alembic upgrade head
+
+# Check all services are running:
+docker compose ps
+
+# View logs:
+docker compose logs -f api
+docker compose logs -f worker
+docker compose logs -f browser-worker
+
+# Stop everything:
+docker compose down
+
+# Stop and remove volumes (DELETES ALL DATA):
+docker compose down -v
+
+================================================================================
+  IMPORTANT NOTES
+================================================================================
+
+1. SYSTEM CHROME IS REQUIRED
+   Bet9ja blocks Playwright's bundled Chromium at the TLS level.
+   The BrowserManager uses channel="chrome" to use system Chrome.
+   Make sure google-chrome-stable is installed on the server.
+
+   The Dockerfile.browser currently installs Playwright Chromium.
+   For Bet9ja support, you need to modify it to install system Chrome:
+
+   # Add to Dockerfile.browser (before the CMD line):
+   RUN apt-get update && apt-get install -y wget gnupg && \
+       wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | \
+       gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg && \
+       echo "deb [signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | \
+       tee /etc/apt/sources.list.d/google-chrome.list && \
+       apt-get update && apt-get install -y google-chrome-stable xvfb && \
+       rm -rf /var/lib/apt/lists/*
+
+   # And change the CMD to use xvfb:
+   CMD ["xvfb-run", "--auto-servernum", \
+        "celery", "-A", "app.queue.celery_app", "worker", \
+        "--loglevel=info", "--queues=browser", \
+        "--concurrency=2", "--prefetch-multiplier=1"]
+
+2. NIGERIAN IP REQUIRED FOR BET9JA
+   Bet9ja geo-blocks non-Nigerian IPs. Deploy on a Nigerian VPS
+   or use a Nigerian residential proxy.
+
+3. SPORTYBET WORKS FROM MOST IPS
+   SportyBet doesn't have the same geo-blocking. Works from most locations.
+
+4. KEY FILES
+   - app/browser/adapters/bet9ja.py    — Bet9ja extraction (verified working)
+   - app/browser/adapters/sportybet.py — SportyBet extraction (verified working)
+   - app/browser/manager.py            — Browser pool with channel="chrome"
+   - app/browser/stealth.py            — DarkMatter stealth techniques
+   - app/workers/pipeline.py           — 10-step translation pipeline
+   - app/workers/normalizer.py         — Market normalization map
+   - app/config.py                     — All configuration settings
+   - app/main.py                       — FastAPI application entry point
+
+5. SPORTYBET API ENDPOINTS (discovered 2026-04-28)
+   These internal APIs can be used for programmatic access:
+   - GET  /api/ng/factsCenter/liveOrPrematchEvents?sportId=sr:sport:1
+     → Returns all live/prematch events with eventId, homeTeamName, awayTeamName
+   - GET  /api/ng/factsCenter/event?eventId=sr:match:XXXXX
+     → Returns all markets and outcomes for a specific event
+   - GET  /api/ng/orders/share/{shareCode}
+     → Resolves a share code to its selections
+   - POST /api/ng/orders/share
+     → Creates a new share code (needs authentication or specific payload)
+
+6. UNIT TESTS
+   Run with: pytest tests/ -v --tb=short
+   29 tests should pass. Integration tests (marked with @pytest.mark.integration)
+   are skipped by default — they require live browser + network access.
+
+================================================================================
+  TROUBLESHOOTING
+================================================================================
+
+Q: Bet9ja returns ERR_HTTP2_PROTOCOL_ERROR
+A: System Chrome is not being used. Check that BrowserManager launches with
+   channel="chrome". Install google-chrome-stable on the server.
+
+Q: "No module named 'app'"
+A: Make sure you're running from the project root directory, or set
+   PYTHONPATH=/path/to/OddSwitch
+
+Q: Alembic migration fails
+A: Make sure Postgres is running and DATABASE_URL is correct in .env.
+   Check: docker exec oddswitch-postgres pg_isready -U oddswitch
+
+Q: Celery worker can't connect to Redis
+A: Make sure Redis is running: docker exec oddswitch-redis redis-cli ping
+   Check CELERY_BROKER_URL in .env matches the Redis container.
+
+Q: Browser worker times out
+A: On headless servers, make sure Xvfb is installed and the worker is
+   started with xvfb-run. Check: which xvfb-run
+
+Q: Betslip items not loading on Bet9ja
+A: The bookABetCode URL param takes ~4-5 seconds to populate. The adapter
+   waits for .betslip__match elements with a 20-second timeout.

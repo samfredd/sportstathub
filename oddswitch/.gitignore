@@ -1,0 +1,45 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Proxy list
+proxies.txt
+
+# Local research artifacts
+bundle.js
+home.js
+subevent.html
+scratch*.py
+sportybet_api.txt
+scripts/*.png

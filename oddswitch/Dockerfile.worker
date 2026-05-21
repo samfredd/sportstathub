@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY requirements/worker.txt requirements/worker.txt
+COPY requirements/base.txt requirements/base.txt
+RUN pip install --no-cache-dir -r requirements/worker.txt
+
+# Application code
+COPY app/ app/
+COPY pyproject.toml .
+
+CMD ["celery", "-A", "app.queue.celery_app", "worker", \
+     "--loglevel=info", "--queues=translate", \
+     "--concurrency=4", "--prefetch-multiplier=1"]

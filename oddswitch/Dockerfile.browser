@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps (including browser dependencies)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libxkbcommon0 libxdamage1 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libxrandr2 libxcomposite1 \
+    libxfixes3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY requirements/browser.txt requirements/browser.txt
+COPY requirements/base.txt requirements/base.txt
+RUN pip install --no-cache-dir -r requirements/browser.txt
+
+# Install Playwright browsers
+RUN playwright install chromium
+
+# Application code
+COPY app/ app/
+COPY pyproject.toml .
+
+CMD ["celery", "-A", "app.queue.celery_app", "worker", \
+     "--loglevel=info", "--queues=browser", \
+     "--concurrency=2", "--prefetch-multiplier=1"]

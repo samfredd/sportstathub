@@ -1,0 +1,15 @@
+## THIS FILE DETAILS IMPROVEMENTS TO BE ADDED TO THE ODD SWITCH PROJECT LATER. DO NOT ADD THEM NOW, IT IS STILL IN THE EARLY STAGES OF DEVELOPMENT.
+# BEFORE YOU USE THIS FILE, MAKE SURE I EXPLICITLY INDICATE THAT YOU DO SO. IF NOT, IGNORE THIS FILE COMPLETELY, IT IS NOT YET TIME.
+
+# APPEND NEW IDEAS TO THE END OF THIS FILE, WITH A HEADER.
+
+### JWT Authentication
+- Add JWT token support alongside API key auth
+- Token issuance endpoint, refresh tokens, expiry management
+- Allows more granular session-based access control for client integrations
+
+### HMAC Request Signing
+- Optional HMAC signing for client requests (Phase 2+)
+- Clients sign request body with shared secret
+- Server verifies signature before processing
+- Prevents request tampering in transit

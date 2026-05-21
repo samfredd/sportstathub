@@ -1,0 +1,3 @@
+-r base.txt
+slowapi>=0.1.9,<1.0
+prometheus-client>=0.20,<1.0
