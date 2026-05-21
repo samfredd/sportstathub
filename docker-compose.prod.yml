@@ -86,7 +86,8 @@ services:
       PAYSTACK_PUBLIC_KEY:    "${PAYSTACK_PUBLIC_KEY:-}"
       PAYSTACK_SECRET_KEY:    "${PAYSTACK_SECRET_KEY:-}"
       PAYSTACK_CALLBACK_URL:  "https://${DOMAIN}/dashboard/subscription"
-      ODDSWITCH_URL:         "http://localhost:8001"
+      AI_SERVICE_URL:         "http://ai-service:8000"
+      ODDSWITCH_URL:         "http://oddswitch-api:8000"
       SMTP_HOST:             "${SMTP_HOST:-}"
       SMTP_PORT:             "${SMTP_PORT:-587}"
       SMTP_SECURE:           "${SMTP_SECURE:-false}"
@@ -102,6 +103,10 @@ services:
       redis:
         condition: service_healthy
       ollama:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+      oddswitch-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
@@ -156,6 +161,112 @@ services:
       - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://${DOMAIN}/$${1}"
       - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
       - "traefik.http.routers.frontend.middlewares=www-redirect"
+
+  # ── FastAPI prediction service ────────────────────────────────────────────
+  ai-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-sportstathub}/ai-service:${IMAGE_TAG:-latest}
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - web
+      - internal
+
+  # ── OddSwitch booking-code translation engine ────────────────────────────
+  oddswitch-db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: "${DB_PASSWORD}"
+    command:
+      - sh
+      - -c
+      - |
+        until pg_isready -h db -U project; do sleep 1; done
+        psql -h db -U project -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'oddswitch'" | grep -q 1 || \
+          psql -h db -U project -d postgres -c "CREATE DATABASE oddswitch"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - web
+      - internal
+
+  oddswitch-api:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-sportstathub}/oddswitch-api:${IMAGE_TAG:-latest}
+    build:
+      context: ./oddswitch
+      dockerfile: Dockerfile.api
+    restart: always
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"]
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://project:${DB_PASSWORD}@db:5432/oddswitch"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/3"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD}@redis:6379/4"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+    depends_on:
+      oddswitch-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - web
+      - internal
+
+  oddswitch-worker:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-sportstathub}/oddswitch-worker:${IMAGE_TAG:-latest}
+    build:
+      context: ./oddswitch
+      dockerfile: Dockerfile.worker
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://project:${DB_PASSWORD}@db:5432/oddswitch"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/3"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD}@redis:6379/4"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+    depends_on:
+      oddswitch-api:
+        condition: service_healthy
+    networks:
+      - web
+      - internal
+
+  oddswitch-browser-worker:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-sportstathub}/oddswitch-browser-worker:${IMAGE_TAG:-latest}
+    build:
+      context: ./oddswitch
+      dockerfile: Dockerfile.browser
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://project:${DB_PASSWORD}@db:5432/oddswitch"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/3"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD}@redis:6379/4"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+    depends_on:
+      oddswitch-api:
+        condition: service_healthy
+    networks:
+      - web
+      - internal
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   db:

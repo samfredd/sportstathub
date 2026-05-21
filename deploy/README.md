@@ -7,6 +7,9 @@ This deployment is fully Dockerized:
 | Traefik | 80, 443 | Reverse proxy and Let's Encrypt SSL |
 | Frontend | internal 3000 | Next.js standalone container |
 | Backend | internal 4000 | Fastify container; runs migrations on start |
+| AI Service | internal 8000 | FastAPI prediction service |
+| OddSwitch API | internal 8000 | Booking-code translation API |
+| OddSwitch Workers | internal | Celery translation and browser workers |
 | PostgreSQL | internal 5432 | Persistent Docker volume |
 | Redis | internal 6379 | Persistent Docker volume |
 | Ollama | localhost 11434 | Optional local AI model runtime |
@@ -72,6 +75,10 @@ Published images:
 ```bash
 ghcr.io/YOUR_OWNER/YOUR_REPO/backend:latest
 ghcr.io/YOUR_OWNER/YOUR_REPO/frontend:latest
+ghcr.io/YOUR_OWNER/YOUR_REPO/ai-service:latest
+ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-api:latest
+ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-worker:latest
+ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-browser-worker:latest
 ```
 
 The workflow lowercases `YOUR_OWNER/YOUR_REPO` before publishing because container image names must be lowercase.
@@ -88,6 +95,8 @@ Repository secrets for SSH deployment:
 - `PRODUCTION_APP_DIR` (optional, defaults to `/var/www/project`)
 
 Manual deployment from Actions uses the workflow dispatch input `deploy=true`. The SSH job logs into GHCR on the server, exports the image variables used by `docker-compose.prod.yml`, and runs `DEPLOY_MODE=pull bash deploy/deploy.sh`.
+
+OddSwitch runs on the Docker network at `http://oddswitch-api:8000`; the backend uses that URL in production. The deploy script also initializes submodules so the server can build OddSwitch locally when `DEPLOY_MODE=build`.
 
 Required server-side `/var/www/project/.env` values still include `DOMAIN`, `ACME_EMAIL`, `DB_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, and `ADMIN_INVITE_KEY`.
 

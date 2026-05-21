@@ -63,6 +63,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -100,6 +102,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -135,6 +139,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -155,6 +161,37 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
           tags: sportstathub-frontend:ci
 
+      - name: Validate AI service image build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-service
+          push: false
+          tags: sportstathub-ai-service:ci
+
+      - name: Validate OddSwitch API image build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.api
+          push: false
+          tags: sportstathub-oddswitch-api:ci
+
+      - name: Validate OddSwitch worker image build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.worker
+          push: false
+          tags: sportstathub-oddswitch-worker:ci
+
+      - name: Validate OddSwitch browser worker image build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.browser
+          push: false
+          tags: sportstathub-oddswitch-browser-worker:ci
+
   publish:
     name: Publish Images
     runs-on: ubuntu-latest
@@ -169,6 +206,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Resolve image namespace
         id: image
@@ -216,6 +255,45 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/frontend:${{ env.IMAGE_TAG }}
             ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/frontend:latest
+
+      - name: Publish AI service image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/ai-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/ai-service:latest
+
+      - name: Publish OddSwitch API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-api:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-api:latest
+
+      - name: Publish OddSwitch worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.worker
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-worker:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-worker:latest
+
+      - name: Publish OddSwitch browser worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./oddswitch
+          file: ./oddswitch/Dockerfile.browser
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-browser-worker:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.image_namespace }}/oddswitch-browser-worker:latest
 
   deploy:
     name: Production Deploy

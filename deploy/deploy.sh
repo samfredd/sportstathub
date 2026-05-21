@@ -21,6 +21,7 @@ echo "════════════════════════�
 # ── Pull latest code ─────────────────────────────────────────────────────────
 echo "▶  Pulling latest code"
 git pull --ff-only origin "$DEPLOY_REF"
+git submodule update --init --recursive
 
 # ── Ensure Docker network exists ─────────────────────────────────────────────
 docker network inspect web >/dev/null 2>&1 || docker network create web
@@ -29,7 +30,7 @@ docker network inspect web >/dev/null 2>&1 || docker network create web
 case "$DEPLOY_MODE" in
   pull)
     echo "▶  Pulling Docker images"
-    $COMPOSE pull backend frontend
+    $COMPOSE pull backend frontend ai-service oddswitch-api oddswitch-worker oddswitch-browser-worker
     ;;
   build)
     echo "▶  Building Docker images"
