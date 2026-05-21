@@ -1,5 +1,6 @@
 name: CI/CD
 
+# Runs validation for pull requests and can publish/deploy production images.
 on:
   pull_request:
   push:
