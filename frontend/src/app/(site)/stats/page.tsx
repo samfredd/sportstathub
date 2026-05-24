@@ -1027,12 +1027,15 @@ function EventsTimeline({ events, home, away }: any) {
 
 function PredictionCard({ prediction, home, away }: any) {
   const pred = prediction?.predictions;
-  const homeWin = parseFloat(pred?.percent?.home ?? "0");
-  const draw = parseFloat(pred?.percent?.draw ?? "0");
-  const awayWin = parseFloat(pred?.percent?.away ?? "0");
-  const winner = pred?.winner?.name;
+  const probabilities = normalizeOutcomePercentages(pred?.percent);
+  const homeWin = probabilities.home;
+  const draw = probabilities.draw;
+  const awayWin = probabilities.away;
+  const winner = pred?.winner?.name || inferPredictedWinner(probabilities, home, away);
   const advice = pred?.advice;
   const goals = pred?.goals;
+  const homeGoals = formatExpectedGoals(goals?.home);
+  const awayGoals = formatExpectedGoals(goals?.away);
   const comparison = prediction?.comparison;
 
   return (
@@ -1065,8 +1068,8 @@ function PredictionCard({ prediction, home, away }: any) {
         {winner && (
           <StatPill label="Predicted Winner" value={winner} accent />
         )}
-        {goals?.home != null && <StatPill label={`${home} Goals`} value={goals.home} />}
-        {goals?.away != null && <StatPill label={`${away} Goals`} value={goals.away} />}
+        {homeGoals != null && <StatPill label={`${home} Goals`} value={homeGoals} />}
+        {awayGoals != null && <StatPill label={`${away} Goals`} value={awayGoals} />}
       </div>
 
       {comparison && (
@@ -1263,6 +1266,40 @@ function H2HTab() {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+function parsePercent(value: any) {
+  if (value == null || value === "") return 0;
+  const numeric = Number(String(value).replace("%", "").trim());
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+}
+
+function normalizeOutcomePercentages(percent: any = {}) {
+  const values = [parsePercent(percent.home), parsePercent(percent.draw), parsePercent(percent.away)];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return { home: 0, draw: 0, away: 0 };
+
+  const rounded = values.map(value => Math.round((value / total) * 100));
+  const diff = 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const largestIndex = rounded.indexOf(Math.max(...rounded));
+  rounded[largestIndex] += diff;
+  return { home: rounded[0], draw: rounded[1], away: rounded[2] };
+}
+
+function inferPredictedWinner(probabilities: { home: number; draw: number; away: number }, home: string, away: string) {
+  const { home: homeWin, draw, away: awayWin } = probabilities;
+  if (!homeWin && !draw && !awayWin) return null;
+  const max = Math.max(homeWin, draw, awayWin);
+  if (max === draw) return "Draw";
+  return max === homeWin ? home : away;
+}
+
+function formatExpectedGoals(value: any) {
+  if (value == null || value === "") return null;
+  const numeric = Number(String(value).trim());
+  if (!Number.isFinite(numeric)) return value;
+  const rounded = Math.round(Math.max(0, numeric) * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
 
 function StatPill({ label, value, accent }: { label: string; value: any; accent?: boolean }) {
   return (

@@ -568,10 +568,10 @@ async function aiRoutes(fastify: any) {
     const systemPrompt = `You are an expert sports analyst. The user will describe a match or ask about a prediction.
 Give a concise, structured prediction with exactly these sections:
 ### Prediction
-Your main tip (e.g. "Home Win", "Over 2.5 Goals", "BTTS Yes").
+Winner: Home / Draw / Away / Not applicable — then your main tip (for example "Home Win", "Over 2.5 Goals", "BTTS Yes"). Always include this line even for totals or player markets.
 
 ### Probability Range
-Approximate probability ranges for the relevant market (for example Home 52-58%, Draw 22-27%, Away 18-24%). For two-outcome markets, make the ranges add up logically.
+For 1X2 questions, use exactly: Home xx%, Draw yy%, Away zz%, where xx + yy + zz = 100. For two-outcome markets, use two percentages that sum to 100. Do not mix percentages with scorelines on this line.
 
 ### Key Factors
 2–3 bullet points explaining the strongest factors. Include H2H and recent form when available. Mention injuries only when the Data Context or user supplied injury information; otherwise state injury data was not available.
@@ -592,7 +592,8 @@ RULES:
 - Base claims on the Data Context when it is available.
 - Use live bookmaker odds only when The Odds API source is marked available in the Data Context.
 - Do not invent live odds, bookmaker prices, team form, injuries, or goal spreads when the user has not provided data.
-- Probability ranges are estimates, not bookmaker odds. They must be plausible percentages and must not imply certainty.`;
+- Never output negative goals, negative xG, or negative spreads.
+- Probability ranges are estimates, not bookmaker odds. They must be plausible percentages, sum to 100 for the stated market, and must not imply certainty.`;
 
     const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}\nSport: ${sportId}\n\n${dataContext.contextText}`;
 
@@ -615,7 +616,7 @@ RULES:
           model:  config.ollamaModel,
           prompt: fullPrompt,
           stream: true,
-          options: { num_ctx: 1024, temperature: 0.4, num_predict: 300, num_thread: 1 },
+          options: { num_ctx: 1024, temperature: 0.25, num_predict: 300, num_thread: 1 },
         }),
         signal: AbortSignal.timeout(60_000),
       });

@@ -28,6 +28,70 @@ export function normalizeGameScore(value: any): number | null {
   return Number.isFinite(numericScore) ? numericScore : null;
 }
 
+function parsePercent(value: any): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(String(value).replace('%', '').trim());
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+}
+
+function formatPercent(value: number): string {
+  return `${Math.max(0, Math.round(value))}%`;
+}
+
+export function normalizePredictionPercentages(percent: any = {}) {
+  const home = parsePercent(percent.home);
+  const draw = parsePercent(percent.draw);
+  const away = parsePercent(percent.away);
+  const values = [home ?? 0, draw ?? 0, away ?? 0];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const normalized = total > 0
+    ? values.map(value => (value / total) * 100)
+    : [34, 33, 33];
+  const rounded = normalized.map(value => Math.round(value));
+  const diff = 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const largestIndex = rounded.indexOf(Math.max(...rounded));
+  rounded[largestIndex] += diff;
+
+  return {
+    ...percent,
+    home: formatPercent(rounded[0]),
+    draw: formatPercent(rounded[1]),
+    away: formatPercent(rounded[2]),
+  };
+}
+
+export function normalizeExpectedGoalValue(value: any) {
+  if (value === null || value === undefined || value === '') return value;
+  const numeric = Number(String(value).trim());
+  if (!Number.isFinite(numeric)) return value;
+  const rounded = Math.round(Math.max(0, numeric) * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+export function sanitizePredictionItem(item: any) {
+  if (!item?.predictions || typeof item.predictions !== 'object') return item;
+  const predictions = { ...item.predictions };
+
+  if (predictions.goals && typeof predictions.goals === 'object') {
+    predictions.goals = {
+      ...predictions.goals,
+      home: normalizeExpectedGoalValue(predictions.goals.home),
+      away: normalizeExpectedGoalValue(predictions.goals.away),
+    };
+  }
+
+  if (predictions.percent && typeof predictions.percent === 'object') {
+    predictions.percent = normalizePredictionPercentages(predictions.percent);
+  }
+
+  return { ...item, predictions };
+}
+
+export function sanitizePredictionResponse(data: any) {
+  if (Array.isArray(data)) return data.map(sanitizePredictionItem);
+  return sanitizePredictionItem(data);
+}
+
 export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
   async function apiFetch(endpoint: string, params: any = {}, ttl?: number) {
     const sport = params.sport || 'football';
@@ -256,8 +320,9 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
     return apiFetch('/players/topredcards', { league: leagueId, season, sport }, DEFAULT_TTL.playerRanks);
   }
 
-  function getPredictions(fixtureId: number) {
-    return apiFetch('/predictions', { fixture: fixtureId }, DEFAULT_TTL.predictions);
+  async function getPredictions(fixtureId: number) {
+    const predictions = await apiFetch('/predictions', { fixture: fixtureId }, DEFAULT_TTL.predictions);
+    return sanitizePredictionResponse(predictions);
   }
 
   function getInjuries(fixtureId: number) {

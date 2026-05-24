@@ -8,10 +8,38 @@ const BOOKMAKER_IDS: Record<string, string> = {
   'SportyBet': 'sportybet',
 };
 
+const SUPPORTED_BOOKMAKERS = Object.keys(BOOKMAKER_IDS).join(', ');
+
 function oddswitchHeaders(): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (ODDSWITCH_API_KEY) h['X-API-Key'] = ODDSWITCH_API_KEY;
   return h;
+}
+
+function validationError(message: string) {
+  const err: any = new Error(message);
+  err.statusCode = 422;
+  return err;
+}
+
+function dependencyError(message: string) {
+  const err: any = new Error(message);
+  err.statusCode = 424;
+  return err;
+}
+
+export function normalizeBookingCodeInput(code: unknown) {
+  const normalized = String(code ?? '').trim().toUpperCase();
+  if (normalized.length < 4) {
+    throw validationError('Enter a booking code with at least 4 characters.');
+  }
+  if (normalized.length > 30) {
+    throw validationError('Booking codes can be at most 30 characters.');
+  }
+  if (!/^[A-Z0-9_-]+$/.test(normalized)) {
+    throw validationError('Booking codes can only contain letters, numbers, hyphens, or underscores.');
+  }
+  return normalized;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,14 +91,16 @@ export function createCodesService(codesRepository) {
   async function convertCode({ code, fromBookmaker, toBookmaker }) {
     const source = BOOKMAKER_IDS[fromBookmaker];
     const target = BOOKMAKER_IDS[toBookmaker];
+    const normalizedCode = normalizeBookingCodeInput(code);
 
     if (!source || !target) {
-      const supported = Object.keys(BOOKMAKER_IDS).join(', ');
-      const err: any = new Error(
-        `Live code conversion only supports: ${supported}. Select one of those bookmakers to use the OddSwitch engine.`
+      throw validationError(
+        `Live code conversion only supports: ${SUPPORTED_BOOKMAKERS}. Select one of those bookmakers to use the OddSwitch engine.`
       );
-      err.statusCode = 422;
-      throw err;
+    }
+
+    if (source === target) {
+      throw validationError('Choose two different bookmakers before converting a booking code.');
     }
 
     let res: Response;
@@ -81,20 +111,20 @@ export function createCodesService(codesRepository) {
         body: JSON.stringify({
           source_bookmaker: source,
           target_bookmaker: target,
-          booking_code: code.trim(),
+          booking_code: normalizedCode,
         }),
       });
     } catch {
-      const err: any = new Error('OddSwitch engine is not reachable. Make sure it is running (./oddswitch/run.sh).');
-      err.statusCode = 503;
-      throw err;
+      throw dependencyError(
+        `Code conversion is temporarily unavailable. You can still browse verified codes, or try again later. Supported bookmakers: ${SUPPORTED_BOOKMAKERS}.`
+      );
     }
 
     if (!res.ok) {
       const body: any = await res.json().catch(() => ({}));
-      const msg = body?.detail ?? body?.error?.message ?? 'OddSwitch returned an error';
+      const msg = body?.detail ?? body?.error?.message ?? 'The conversion engine could not convert this code.';
       const err: any = new Error(msg);
-      err.statusCode = res.status >= 500 ? 503 : res.status;
+      err.statusCode = res.status >= 500 ? 424 : res.status;
       throw err;
     }
 
@@ -111,9 +141,7 @@ export function createCodesService(codesRepository) {
         headers: ODDSWITCH_API_KEY ? { 'X-API-Key': ODDSWITCH_API_KEY } : {},
       });
     } catch {
-      const err: any = new Error('OddSwitch engine is not reachable.');
-      err.statusCode = 503;
-      throw err;
+      throw dependencyError('Code conversion is temporarily unavailable. Try again later.');
     }
 
     if (!res.ok) {

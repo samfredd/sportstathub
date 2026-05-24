@@ -322,11 +322,17 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <Link href="/contact" className="px-2.5 py-1 bg-accent text-white text-[10px] font-black rounded-lg hover:bg-accent-hover transition-all">
-                    Connect
-                  </Link>
                   <button
+                    type="button"
+                    onClick={() => setActiveTab("live")}
+                    className="px-2.5 py-1 bg-accent text-white text-[10px] font-black rounded-lg hover:bg-accent-hover transition-all"
+                  >
+                    Live feed
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowPromo(false)}
+                    aria-label="Dismiss live feed banner"
                     className="text-muted hover:text-foreground p-1 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
                   >
                     <XIcon className="w-3.5 h-3.5" />

@@ -36,7 +36,10 @@ export function createCommunityService(repo, footballService?) {
   }
 
   async function listPredictions(filters, user = null) {
-    const rows = await repo.listPredictions(filters);
+    let rows = await repo.listPredictions(filters);
+    if (rows.length === 0 && filters?.date) {
+      rows = await repo.listPredictions({ ...filters, date: undefined });
+    }
     const unlimitedRequiredPlan = await requiredPlanForFeature('picks_unlimited');
     return rows.map(mapPrediction).map((prediction, index) => {
       const isLockedByFeature = Boolean(unlimitedRequiredPlan && index >= 3);

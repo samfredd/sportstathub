@@ -1035,7 +1035,7 @@ function SmartAnalyseTab(props: MatchTabsProps) {
                 </div>
               </div>
             ) : (
-              <EmptyState title="No live statistics yet" body="Statistics will appear after kickoff." />
+              <EmptyState title="No live statistics yet" body="Provider stats, including xG where available, appear after kickoff. Use the derived signals below until the live feed publishes numbers." />
             )}
           </AnalyticsPanel>
 
@@ -1576,40 +1576,46 @@ function MarketPill({ label, value, accent }: { label: string; value: string; ac
 function ApiPredictionCard({ match, predictions, isFinished }: { match: MatchShape; predictions: any; isFinished: boolean }) {
   const pred = Array.isArray(predictions) ? predictions[0] : predictions;
   if (!pred) return null;
+  const prediction = pred.predictions ?? {};
+  const probabilities = normalizeOutcomePercentages(prediction.percent);
+  const displayedWinner = prediction.winner?.name || inferPredictedWinner(probabilities, match.homeTeam, match.awayTeam);
+  const homeGoals = formatExpectedGoals(prediction.goals?.home);
+  const awayGoals = formatExpectedGoals(prediction.goals?.away);
+
   return (
     <AnalyticsPanel title="Match Forecast" eyebrow="statistical model">
       <div className="space-y-4">
-        {!isFinished && pred.predictions?.winner && (
+        {!isFinished && displayedWinner && (
           <div className="flex items-center justify-between p-4 rounded-xl bg-accent/8 border border-accent/20">
             <div>
               <div className="text-[10px] text-accent font-black uppercase tracking-widest mb-1">Predicted Winner</div>
-              <div className="text-lg font-black text-foreground">{pred.predictions.winner.name || "Draw"}</div>
-              {pred.predictions.winner.comment && <div className="text-xs text-muted mt-0.5">{pred.predictions.winner.comment}</div>}
+              <div className="text-lg font-black text-foreground">{displayedWinner}</div>
+              {prediction.winner?.comment && <div className="text-xs text-muted mt-0.5">{prediction.winner.comment}</div>}
             </div>
             <div className="text-3xl">🏆</div>
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {pred.predictions?.goals?.home !== undefined && (
-            <MarketPill label={`${match.homeTeam} Goals`} value={pred.predictions.goals.home} />
+          {homeGoals != null && (
+            <MarketPill label={`${match.homeTeam} Goals`} value={homeGoals} />
           )}
-          {pred.predictions?.goals?.away !== undefined && (
-            <MarketPill label={`${match.awayTeam} Goals`} value={pred.predictions.goals.away} />
+          {awayGoals != null && (
+            <MarketPill label={`${match.awayTeam} Goals`} value={awayGoals} />
           )}
-          {pred.predictions?.under_over && (
-            <MarketPill label="Over/Under" value={pred.predictions.under_over} accent />
+          {prediction.under_over && (
+            <MarketPill label="Over/Under" value={prediction.under_over} accent />
           )}
         </div>
-        {pred.predictions?.percent && (
-          <WinBar home={pred.predictions.percent.home} draw={pred.predictions.percent.draw} away={pred.predictions.percent.away} homeTeam={match.homeTeam} awayTeam={match.awayTeam} />
+        {prediction.percent && (
+          <WinBar home={probabilities.home} draw={probabilities.draw} away={probabilities.away} homeTeam={match.homeTeam} awayTeam={match.awayTeam} />
         )}
       </div>
     </AnalyticsPanel>
   );
 }
 
-function WinBar({ home, draw, away, homeTeam, awayTeam }: { home: string; draw: string; away: string; homeTeam: string; awayTeam: string }) {
-  const h = parseInt(home) || 0, d = parseInt(draw) || 0, a = parseInt(away) || 0;
+function WinBar({ home, draw, away, homeTeam, awayTeam }: { home: number; draw: number; away: number; homeTeam: string; awayTeam: string }) {
+  const h = home, d = draw, a = away;
   return (
     <div className="space-y-2">
       <div className="flex h-3.5 rounded-full overflow-hidden gap-0.5">
@@ -1618,12 +1624,46 @@ function WinBar({ home, draw, away, homeTeam, awayTeam }: { home: string; draw: 
         {a > 0 && <div className="bg-danger rounded-r-full" style={{ width: `${a}%` }} />}
       </div>
       <div className="flex justify-between text-[10px] font-black">
-        <span className="text-accent">{homeTeam} {home}</span>
-        <span className="text-muted">Draw {draw}</span>
-        <span className="text-danger">{awayTeam} {away}</span>
+        <span className="text-accent">{homeTeam} {h}%</span>
+        <span className="text-muted">Draw {d}%</span>
+        <span className="text-danger">{awayTeam} {a}%</span>
       </div>
     </div>
   );
+}
+
+function parsePercent(value: any) {
+  if (value == null || value === "") return 0;
+  const numeric = Number(String(value).replace("%", "").trim());
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+}
+
+function normalizeOutcomePercentages(percent: any = {}) {
+  const values = [parsePercent(percent.home), parsePercent(percent.draw), parsePercent(percent.away)];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return { home: 0, draw: 0, away: 0 };
+
+  const rounded = values.map(value => Math.round((value / total) * 100));
+  const diff = 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const largestIndex = rounded.indexOf(Math.max(...rounded));
+  rounded[largestIndex] += diff;
+  return { home: rounded[0], draw: rounded[1], away: rounded[2] };
+}
+
+function inferPredictedWinner(probabilities: { home: number; draw: number; away: number }, homeTeam: string, awayTeam: string) {
+  const { home, draw, away } = probabilities;
+  if (!home && !draw && !away) return null;
+  const max = Math.max(home, draw, away);
+  if (max === draw) return "Draw";
+  return max === home ? homeTeam : awayTeam;
+}
+
+function formatExpectedGoals(value: any) {
+  if (value == null || value === "") return null;
+  const numeric = Number(String(value).trim());
+  if (!Number.isFinite(numeric)) return value;
+  const rounded = Math.round(Math.max(0, numeric) * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
 function InjuryCard({ title, logo, injuries }: { title: string; logo: string; injuries: any[] }) {
