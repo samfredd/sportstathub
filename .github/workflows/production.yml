@@ -353,7 +353,13 @@ jobs:
             docker compose -f docker-compose.prod.yml pull $DEPLOY_SERVICES
             docker compose -f docker-compose.prod.yml up -d --remove-orphans $DEPLOY_SERVICES
 
-            sleep 5
-            curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/health" >/dev/null
-            curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" >/dev/null
             docker compose -f docker-compose.prod.yml ps
+            for service in $DEPLOY_SERVICES; do
+              container_id="$(docker compose -f docker-compose.prod.yml ps -q "$service")"
+              [ -n "$container_id" ] || continue
+              status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+              if [ "$status" != "healthy" ] && [ "$status" != "running" ]; then
+                docker compose -f docker-compose.prod.yml logs --tail=80 "$service"
+                exit 1
+              fi
+            done
