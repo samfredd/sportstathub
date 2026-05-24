@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { MatchShape, ParsedMatchStats, H2HStats } from "@/lib/transforms";
 import { withAuth } from "@/lib/authHeaders";
-import PremiumGate from "@/components/PremiumGate";
+import PremiumGate, { ProBadge } from "@/components/PremiumGate";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -102,6 +102,8 @@ type StatsCache = Record<number, MatchStatsArr | null>;
 type StatTypeId = (typeof STAT_TYPES)[number]["id"];
 
 const LAST_N = [5, 10, 15, 20] as const;
+const FREE_H2H_ROWS = 5;
+const FREE_STANDINGS_ROWS = 3;
 type VenueFilter = "all" | "home" | "away";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -671,6 +673,8 @@ function MatchTableRow({ f, statType, statsCache }: { f: FormMatch; statType: St
 
 function H2HTab({ match, h2hStats, trend, lastN, statType }: MatchTabsProps & { lastN: number; statType: StatTypeId }) {
   const played = (trend.played ?? []).slice(0, lastN);
+  const previewPlayed = played.slice(0, FREE_H2H_ROWS);
+  const lockedPlayed = played.slice(FREE_H2H_ROWS);
 
   // ── Stats cache (same pattern as LastMatchesTab) ─────────────────────────
   const [statsCache, setStatsCache] = useState<StatsCache>({});
@@ -729,11 +733,19 @@ function H2HTab({ match, h2hStats, trend, lastN, statType }: MatchTabsProps & { 
       <div className="rounded-2xl bg-surface border border-border/40 overflow-hidden">
         <div className="px-4 py-3 border-b border-border/30 flex items-center gap-2">
           <span className="text-sm font-black text-foreground uppercase tracking-tight">Recent Meetings</span>
+          <ProBadge />
           <span className="ml-auto text-[10px] text-muted font-bold">Last {played.length}</span>
           {loadingStats && (
             <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin ml-1" />
           )}
         </div>
+        {played.length > FREE_H2H_ROWS && (
+          <div className="px-4 py-2 border-b border-border/20 bg-background/30">
+            <p className="text-[10px] text-muted font-bold">
+              Free preview shows the latest {FREE_H2H_ROWS}. Pro unlocks the remaining meetings for this range.
+            </p>
+          </div>
+        )}
 
         {played.length > 0 ? (
           <div className="overflow-x-auto">
@@ -746,9 +758,18 @@ function H2HTab({ match, h2hStats, trend, lastN, statType }: MatchTabsProps & { 
                 ))}
               </div>
               <div className="divide-y divide-border/15">
-                {played.map((fixture: any, i: number) => (
+                {previewPlayed.map((fixture: any, i: number) => (
                   <H2HRow key={i} fixture={fixture} homeTeamId={match.homeId} statType={statType} statsCache={statsCache} />
                 ))}
+                {lockedPlayed.length > 0 && (
+                  <PremiumGate feature="Full H2H Details" mode="blur" flagKey="h2h_analyser">
+                    <div className="divide-y divide-border/15">
+                      {lockedPlayed.map((fixture: any, i: number) => (
+                        <H2HRow key={`locked-${i}`} fixture={fixture} homeTeamId={match.homeId} statType={statType} statsCache={statsCache} />
+                      ))}
+                    </div>
+                  </PremiumGate>
+                )}
               </div>
             </div>
           </div>
@@ -876,63 +897,82 @@ function StandingsTab({ match, standings }: MatchTabsProps) {
   return (
     <div className="rounded-2xl bg-surface border border-border/50 overflow-hidden">
       <div className="px-5 py-3 border-b border-border/40 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-black text-foreground tracking-tight uppercase">League Standings</h2>
-        <span className="text-[10px] text-muted font-black uppercase tracking-widest">current season</span>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-black text-foreground tracking-tight uppercase">League Standings</h2>
+          <ProBadge />
+        </div>
+        <span className="text-[10px] text-muted font-black uppercase tracking-widest">top 3 preview</span>
       </div>
 
       <div className="overflow-x-auto">
-        {leagueGroups.map((group: any[], gi: number) => (
-          <div key={gi} className="min-w-[360px]">
-            {leagueGroups.length > 1 && (
-              <div className="px-5 py-2 bg-background/50 border-b border-border/30">
-                <span className="text-[10px] font-black text-muted uppercase tracking-widest">Group {gi + 1}</span>
-              </div>
-            )}
-            <div className="px-3 py-2 grid grid-cols-[24px_1fr_30px_30px_30px_30px_36px_36px] gap-1 border-b border-border/30">
-              {["#", "Team", "P", "W", "D", "L", "GD", "Pts"].map((h) => (
-                <span key={h} className="text-[9px] text-muted font-black uppercase tracking-widest text-center first:text-left">
-                  {h}
+        {leagueGroups.map((group: any[], gi: number) => {
+          const previewRows = group.slice(0, FREE_STANDINGS_ROWS);
+          const lockedRows = group.slice(FREE_STANDINGS_ROWS);
+          const renderStandingRow = (entry: any) => {
+            const isHighlighted = entry.team?.id === match.homeId || entry.team?.id === match.awayId;
+            return (
+              <div
+                key={entry.team?.id}
+                className={`px-3 py-2.5 grid grid-cols-[24px_1fr_30px_30px_30px_30px_36px_36px] gap-1 items-center transition-colors ${
+                  isHighlighted ? "bg-accent/8 border-l-2 border-accent" : "hover:bg-background/40"
+                }`}
+              >
+                <span className={`text-sm font-black tabular-nums ${isHighlighted ? "text-accent" : "text-muted"}`}>
+                  {entry.rank}
                 </span>
-              ))}
-            </div>
-            <div className="divide-y divide-border/20">
-              {group.map((entry: any) => {
-                const isHighlighted = entry.team?.id === match.homeId || entry.team?.id === match.awayId;
-                return (
-                  <div
-                    key={entry.team?.id}
-                    className={`px-3 py-2.5 grid grid-cols-[24px_1fr_30px_30px_30px_30px_36px_36px] gap-1 items-center transition-colors ${
-                      isHighlighted ? "bg-accent/8 border-l-2 border-accent" : "hover:bg-background/40"
-                    }`}
-                  >
-                    <span className={`text-sm font-black tabular-nums ${isHighlighted ? "text-accent" : "text-muted"}`}>
-                      {entry.rank}
-                    </span>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {entry.team?.logo && (
-                        <img src={entry.team.logo} alt={entry.team?.name} className="w-4 h-4 object-contain shrink-0" />
-                      )}
-                      <span className={`text-[12px] font-bold truncate ${isHighlighted ? "text-accent" : "text-foreground"}`}>
-                        {entry.team?.name}
-                      </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {entry.team?.logo && (
+                    <img src={entry.team.logo} alt={entry.team?.name} className="w-4 h-4 object-contain shrink-0" />
+                  )}
+                  <span className={`text-[12px] font-bold truncate ${isHighlighted ? "text-accent" : "text-foreground"}`}>
+                    {entry.team?.name}
+                  </span>
+                </div>
+                {[entry.all?.played, entry.all?.win, entry.all?.draw, entry.all?.lose].map((v, i) => (
+                  <span key={i} className="text-[12px] text-muted tabular-nums text-center">{v ?? 0}</span>
+                ))}
+                <span className={`text-[12px] tabular-nums text-center font-bold ${
+                  (entry.goalsDiff ?? 0) > 0 ? "text-accent" : (entry.goalsDiff ?? 0) < 0 ? "text-danger" : "text-muted"
+                }`}>
+                  {(entry.goalsDiff ?? 0) > 0 ? "+" : ""}{entry.goalsDiff ?? 0}
+                </span>
+                <span className={`text-[13px] font-black tabular-nums text-center ${isHighlighted ? "text-accent" : "text-foreground"}`}>
+                  {entry.points ?? 0}
+                </span>
+              </div>
+            );
+          };
+
+          return (
+            <div key={gi} className="min-w-[360px]">
+              {leagueGroups.length > 1 && (
+                <div className="px-5 py-2 bg-background/50 border-b border-border/30">
+                  <span className="text-[10px] font-black text-muted uppercase tracking-widest">Group {gi + 1}</span>
+                </div>
+              )}
+              <div className="px-3 py-2 grid grid-cols-[24px_1fr_30px_30px_30px_30px_36px_36px] gap-1 border-b border-border/30">
+                {["#", "Team", "P", "W", "D", "L", "GD", "Pts"].map((h) => (
+                  <span key={h} className="text-[9px] text-muted font-black uppercase tracking-widest text-center first:text-left">
+                    {h}
+                  </span>
+                ))}
+              </div>
+              <div className="px-4 py-2 border-b border-border/20 bg-background/30">
+                <p className="text-[10px] text-muted font-bold">Free preview shows the top {FREE_STANDINGS_ROWS} teams. Pro unlocks the full table and position context.</p>
+              </div>
+              <div className="divide-y divide-border/20">
+                {previewRows.map(renderStandingRow)}
+                {lockedRows.length > 0 && (
+                  <PremiumGate feature="Full League Standings" mode="blur" flagKey="advanced_stats">
+                    <div className="divide-y divide-border/20">
+                      {lockedRows.map(renderStandingRow)}
                     </div>
-                    {[entry.all?.played, entry.all?.win, entry.all?.draw, entry.all?.lose].map((v, i) => (
-                      <span key={i} className="text-[12px] text-muted tabular-nums text-center">{v ?? 0}</span>
-                    ))}
-                    <span className={`text-[12px] tabular-nums text-center font-bold ${
-                      (entry.goalsDiff ?? 0) > 0 ? "text-accent" : (entry.goalsDiff ?? 0) < 0 ? "text-danger" : "text-muted"
-                    }`}>
-                      {(entry.goalsDiff ?? 0) > 0 ? "+" : ""}{entry.goalsDiff ?? 0}
-                    </span>
-                    <span className={`text-[13px] font-black tabular-nums text-center ${isHighlighted ? "text-accent" : "text-foreground"}`}>
-                      {entry.points ?? 0}
-                    </span>
-                  </div>
-                );
-              })}
+                  </PremiumGate>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

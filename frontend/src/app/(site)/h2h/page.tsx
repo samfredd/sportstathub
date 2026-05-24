@@ -52,6 +52,35 @@ export default function H2HPage() {
   }
 
   const stats = h2hData ? computeStats(h2hData, teamA?.id) : null;
+  const previewMeetings = Array.isArray(h2hData) ? h2hData.slice(0, 5) : [];
+  const lockedMeetings = Array.isArray(h2hData) ? h2hData.slice(5) : [];
+
+  function renderMeeting(f) {
+    const m = fixtureToMatch(f);
+    if (!m) return null;
+    const date = new Date(f.fixture.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+    const gh = f.goals?.home, ga = f.goals?.away;
+    const aIsHome = f.teams?.home?.id === teamA?.id;
+    const aScore = aIsHome ? gh : ga;
+    const bScore = aIsHome ? ga : gh;
+    const winner = aScore > bScore ? "a" : bScore > aScore ? "b" : "draw";
+    return (
+      <div key={m.id} className="grid grid-cols-3 items-center hover:bg-surface/30 transition-colors">
+        <div className="flex items-center justify-end gap-3 px-6 py-4">
+          {m.homeLogo && <img src={m.homeLogo} alt="" className="w-6 h-6 object-contain shrink-0" />}
+          <span className={`text-sm font-black truncate text-right ${winner === (aIsHome ? "a" : "b") ? "text-accent" : "text-foreground/70"}`}>{m.homeTeam}</span>
+        </div>
+        <div className="flex flex-col items-center py-4 gap-1">
+          <span className="text-base font-black text-foreground tabular-nums">{m.score ?? "–"}</span>
+          <span className="text-[9px] text-muted font-bold">{date}</span>
+        </div>
+        <div className="flex items-center justify-start gap-3 px-6 py-4">
+          {m.awayLogo && <img src={m.awayLogo} alt="" className="w-6 h-6 object-contain shrink-0" />}
+          <span className={`text-sm font-black truncate ${winner === (aIsHome ? "b" : "a") ? "text-danger" : "text-foreground/70"}`}>{m.awayTeam}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 lg:px-6 py-12 font-sans space-y-8">
@@ -167,12 +196,12 @@ export default function H2HPage() {
               <div className="px-6 pb-6">
                 <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
                   <div className="bg-accent transition-all rounded-l-full" style={{ width: stats.aWinPct }} />
-                  <div className="bg-muted/30 transition-all" style={{ width: stats.drawPct }} />
+                  <div className="bg-chart-3 transition-all" style={{ width: stats.drawPct }} />
                   <div className="bg-danger transition-all rounded-r-full" style={{ width: stats.bWinPct }} />
                 </div>
                 <div className="flex justify-between mt-2 text-[10px] font-black uppercase tracking-widest">
                   <span className="text-accent">{stats.aWinPct}</span>
-                  <span className="text-muted">{stats.drawPct} draws</span>
+                  <span className="text-chart-3">{stats.drawPct} draws</span>
                   <span className="text-danger">{stats.bWinPct}</span>
                 </div>
               </div>
@@ -187,36 +216,21 @@ export default function H2HPage() {
                 </div>
                 <span className="text-xs text-muted font-bold">{h2hData.length} matches</span>
               </div>
-              <PremiumGate feature="H2H Analyser" mode="blur" flagKey="h2h_analyser">
+              <div className="px-7 py-3 border-b border-border/20 bg-background/30">
+                <p className="text-[11px] text-muted font-bold">
+                  Free preview shows the latest five meetings. Pro unlocks the full historical list and deeper patterns.
+                </p>
+              </div>
+              <div className="divide-y divide-border/10">
+                {previewMeetings.map(renderMeeting)}
+              </div>
+              {lockedMeetings.length > 0 && (
+                <PremiumGate feature="H2H Analyser" mode="blur" flagKey="h2h_analyser">
                 <div className="divide-y divide-border/10">
-                  {h2hData.map((f) => {
-                    const m = fixtureToMatch(f);
-                    if (!m) return null;
-                    const date = new Date(f.fixture.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
-                    const gh = f.goals?.home, ga = f.goals?.away;
-                    const aIsHome = f.teams?.home?.id === teamA?.id;
-                    const aScore = aIsHome ? gh : ga;
-                    const bScore = aIsHome ? ga : gh;
-                    const winner = aScore > bScore ? "a" : bScore > aScore ? "b" : "draw";
-                    return (
-                      <div key={m.id} className="grid grid-cols-3 items-center hover:bg-surface/30 transition-colors">
-                        <div className="flex items-center justify-end gap-3 px-6 py-4">
-                          {m.homeLogo && <img src={m.homeLogo} alt="" className="w-6 h-6 object-contain shrink-0" />}
-                          <span className={`text-sm font-black truncate text-right ${winner === (aIsHome ? "a" : "b") ? "text-accent" : "text-foreground/70"}`}>{m.homeTeam}</span>
-                        </div>
-                        <div className="flex flex-col items-center py-4 gap-1">
-                          <span className="text-base font-black text-foreground tabular-nums">{m.score ?? "–"}</span>
-                          <span className="text-[9px] text-muted font-bold">{date}</span>
-                        </div>
-                        <div className="flex items-center justify-start gap-3 px-6 py-4">
-                          {m.awayLogo && <img src={m.awayLogo} alt="" className="w-6 h-6 object-contain shrink-0" />}
-                          <span className={`text-sm font-black truncate ${winner === (aIsHome ? "b" : "a") ? "text-danger" : "text-foreground/70"}`}>{m.awayTeam}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {lockedMeetings.map(renderMeeting)}
                 </div>
-              </PremiumGate>
+                </PremiumGate>
+              )}
             </div>
           </div>
         )}

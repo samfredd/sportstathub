@@ -20,6 +20,24 @@ export interface SubscriptionState {
   isAdmin: boolean;
 }
 
+function decodeJwt(token: string): { role?: string; exp?: number } | null {
+  try {
+    const payload = token.split(".")[1];
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(normalized)) as { role?: string; exp?: number };
+  } catch {
+    return null;
+  }
+}
+
+function isValidAdminToken(token: string | null): boolean {
+  if (!token) return false;
+  const payload = decodeJwt(token);
+  if (payload?.role !== "admin") return false;
+  if (payload.exp && payload.exp * 1000 < Date.now()) return false;
+  return true;
+}
+
 export function useSubscription(): SubscriptionState {
   const [state, setState] = useState<SubscriptionState>({
     plan: null,
@@ -40,6 +58,20 @@ export function useSubscription(): SubscriptionState {
     if (!token) {
       setState(s => ({ ...s, loading: false, isLoggedIn: false }));
       return;
+    }
+
+    const tokenIsAdmin = isValidAdminToken(token);
+    if (tokenIsAdmin) {
+      setState({
+        plan: "admin",
+        status: "active",
+        expiresAt: null,
+        loading: false,
+        isPro: true,
+        isFree: false,
+        isLoggedIn: true,
+        isAdmin: true,
+      });
     }
 
     communityApi.getMe()
@@ -63,6 +95,7 @@ export function useSubscription(): SubscriptionState {
         });
       })
       .catch(() => {
+        if (tokenIsAdmin) return;
         setState(s => ({ ...s, loading: false, isLoggedIn: !!token }));
       });
   }, []);

@@ -176,6 +176,8 @@ async function buildFreeTextDataContext(footballService: any, oddsService: any, 
       generatedAt,
       contextText: `## Data Context
 Source: API-Sports ${sportId} endpoints. Last updated: ${generatedAt}.
+Update cadence: API-Sports form and H2H responses may be cached for up to 1 hour. Odds are checked at request time when The Odds API is configured.
+Injury context: not available from this endpoint unless the user provides it. Do not invent injuries.
 Parsed matchup: ${home.name} vs ${away.name}
 
 Head-to-head meetings found: ${played.length}
@@ -564,27 +566,33 @@ async function aiRoutes(fastify: any) {
     const dataContext = await buildFreeTextDataContext(footballService, oddsService, userPrompt, sportId);
 
     const systemPrompt = `You are an expert sports analyst. The user will describe a match or ask about a prediction.
-Give a concise, structured prediction with these sections:
+Give a concise, structured prediction with exactly these sections:
 ### Prediction
 Your main tip (e.g. "Home Win", "Over 2.5 Goals", "BTTS Yes").
 
-### Reasoning
-2–3 bullet points explaining why.
+### Probability Range
+Approximate probability ranges for the relevant market (for example Home 52-58%, Draw 22-27%, Away 18-24%). For two-outcome markets, make the ranges add up logically.
+
+### Key Factors
+2–3 bullet points explaining the strongest factors. Include H2H and recent form when available. Mention injuries only when the Data Context or user supplied injury information; otherwise state injury data was not available.
 
 ### Odds Estimate
 Estimated decimal fair odds range (e.g. 1.70–1.90). Keep football 1X2 estimates in realistic bookmaker-style ranges; never output odds below 1.10, avoid exact single odds, and say "not enough data" if the prompt lacks context.
+
+### Data Sources
+List the sources used and update frequency/freshness in one short sentence.
 
 ### Confidence
 Low / Medium / High — and the key uncertainty.
 
 RULES:
 - Be honest about uncertainty — never guarantee outcomes.
-- Keep total response under 200 words.
+- Keep total response under 240 words.
 - Use hedged language ("likely", "suggests", "tends to").
 - Base claims on the Data Context when it is available.
 - Use live bookmaker odds only when The Odds API source is marked available in the Data Context.
 - Do not invent live odds, bookmaker prices, team form, injuries, or goal spreads when the user has not provided data.
-- If you estimate probabilities, make them plausible percentages that add up logically for the stated market.`;
+- Probability ranges are estimates, not bookmaker odds. They must be plausible percentages and must not imply certainty.`;
 
     const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}\nSport: ${sportId}\n\n${dataContext.contextText}`;
 

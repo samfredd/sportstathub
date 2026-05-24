@@ -66,6 +66,10 @@ const sportFilters: Array<{ label: string; value: Sport }> = [
 ];
 
 const markets = ["All", "1X2", "Moneyline", "Over/Under", "Totals", "Handicap", "Spread", "BTTS", "Player Props"];
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 type RequestState = "idle" | "loading" | "ready" | "error";
 type ActiveTab = "tips" | "ai";
@@ -79,6 +83,8 @@ export function PredictionsHub() {
   const [expertPicks, setExpertPicks] = useState<CommunityPrediction[]>([]);
   const [state, setState]   = useState<RequestState>("idle");
   const [activeTab, setActiveTab] = useState<ActiveTab>("tips");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Fetch community predictions
   useEffect(() => {
@@ -117,6 +123,21 @@ export function PredictionsHub() {
     void loadExpert();
   }, []);
 
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      if (!calendarRef.current?.contains(event.target as Node)) setCalendarOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setCalendarOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
   const headlineMetrics = useMemo(() => {
     const total     = predictions.length;
     const withOdds  = predictions.filter((p) => p.prediction?.odds != null);
@@ -130,12 +151,6 @@ export function PredictionsHub() {
       { label: "With codes",      value: withCodes.toString() },
     ];
   }, [predictions]);
-
-  function shiftDate(days: number) {
-    const base = date ? new Date(`${date}T00:00:00`) : new Date();
-    base.setDate(base.getDate() + days);
-    setDate(base.toISOString().slice(0, 10));
-  }
 
   return (
     <div className="relative px-4 lg:px-6 pb-28 lg:pb-10 pt-4">
@@ -177,12 +192,20 @@ export function PredictionsHub() {
             <SlidersIcon className="w-4 h-4 text-accent" />
           </div>
           <h2 className="text-sm font-black text-foreground uppercase tracking-wider">Filters & Search</h2>
+          {state === "loading" && (
+            <span className="ml-auto inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent" role="status">
+              <LoadingSpinner className="w-3.5 h-3.5" />
+              Updating tips
+            </span>
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {/* Sport */}
           <div className="relative">
+            <label htmlFor="prediction-sport" className="sr-only">Filter predictions by sport</label>
             <ChevronIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
             <select
+              id="prediction-sport"
               value={sport}
               onChange={(e) => setSport(e.target.value)}
               className="w-full appearance-none glass border border-border/50 focus:border-accent/50 rounded-xl px-4 py-2.5 text-sm font-bold text-foreground bg-surface focus:outline-none cursor-pointer transition-colors pr-9"
@@ -195,8 +218,10 @@ export function PredictionsHub() {
 
           {/* Market */}
           <div className="relative">
+            <label htmlFor="prediction-market" className="sr-only">Filter predictions by market</label>
             <ChevronIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
             <select
+              id="prediction-market"
               value={market}
               onChange={(e) => setMarket(e.target.value)}
               className="w-full appearance-none glass border border-border/50 focus:border-accent/50 rounded-xl px-4 py-2.5 text-sm font-bold text-foreground bg-surface focus:outline-none cursor-pointer transition-colors pr-9"
@@ -209,25 +234,41 @@ export function PredictionsHub() {
 
           {/* League search */}
           <div className="relative group">
+            <label htmlFor="prediction-league" className="sr-only">Search predictions by league or team</label>
             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none group-focus-within:text-accent transition-colors" />
-            <input type="text" value={league} onChange={(e) => setLeague(e.target.value)}
+            <input id="prediction-league" type="text" value={league} onChange={(e) => setLeague(e.target.value)}
               placeholder="League / team…"
               className="w-full glass border border-border/50 focus:border-accent/50 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-foreground placeholder:text-muted/40 focus:outline-none transition-colors bg-surface" />
           </div>
 
           {/* Date */}
-          <div className="space-y-2">
-            <div className="relative group">
-              <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none group-focus-within:text-accent transition-colors" />
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                aria-label="Prediction date"
-                className="w-full glass border border-border/50 focus:border-accent/50 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-foreground focus:outline-none transition-colors bg-surface [color-scheme:dark]" />
-            </div>
-            <div className="grid grid-cols-3 gap-1">
-              <button type="button" onClick={() => shiftDate(-1)} title="Previous day" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Prev</button>
-              <button type="button" onClick={() => setDate(new Date().toISOString().slice(0, 10))} title="Jump to today" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Today</button>
-              <button type="button" onClick={() => shiftDate(1)} title="Next day" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Next</button>
-            </div>
+          <div className="relative" ref={calendarRef}>
+            <span id="prediction-date-label" className="sr-only">Choose prediction date</span>
+            <button
+              type="button"
+              aria-labelledby="prediction-date-label prediction-date-value"
+              aria-haspopup="dialog"
+              aria-expanded={calendarOpen}
+              onClick={() => setCalendarOpen((open) => !open)}
+              className={`w-full glass border rounded-xl pl-4 pr-3 py-2.5 text-sm font-bold text-foreground focus:outline-none transition-colors bg-surface flex items-center justify-between gap-3 ${
+                calendarOpen ? "border-accent/50" : "border-border/50 hover:border-accent/30"
+              }`}
+            >
+              <span className="flex items-center gap-3 min-w-0">
+                <CalendarIcon className="w-4 h-4 text-accent shrink-0" />
+                <span id="prediction-date-value" className="truncate">{formatDateLabel(date)}</span>
+              </span>
+              <ChevronIcon className={`w-4 h-4 text-muted transition-transform ${calendarOpen ? "rotate-180" : ""}`} />
+            </button>
+            {calendarOpen && (
+              <div className="absolute right-0 top-full mt-2 z-50">
+                <MonthCalendar
+                  selectedDate={date}
+                  onSelect={(iso) => setDate(iso)}
+                  onClose={() => setCalendarOpen(false)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -258,6 +299,156 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       }`}>
       {children}
     </button>
+  );
+}
+
+function LoadingSpinner({ className = "w-4 h-4" }: { className?: string }) {
+  return <span className={`inline-block rounded-full border-2 border-current border-t-transparent animate-spin ${className}`} aria-hidden="true" />;
+}
+
+function toIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function dateFromIso(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function formatDateLabel(iso: string) {
+  const selected = dateFromIso(iso);
+  const today = new Date();
+  const todayIso = toIsoDate(today);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (iso === todayIso) return "Today";
+  if (iso === toIsoDate(tomorrow)) return "Tomorrow";
+  if (iso === toIsoDate(yesterday)) return "Yesterday";
+  return selected.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+
+function MonthCalendar({
+  selectedDate,
+  onSelect,
+  onClose,
+}: {
+  selectedDate: string;
+  onSelect: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const [viewDate, setViewDate] = useState(() => dateFromIso(selectedDate));
+  const todayIso = toIsoDate(new Date());
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevMonthDays = new Date(year, month, 0).getDate();
+
+  function selectDate(date: Date) {
+    onSelect(toIsoDate(date));
+    onClose();
+  }
+
+  return (
+    <div className="w-[292px] rounded-2xl bg-surface border border-border/80 p-4 shadow-premium" role="dialog" aria-label="Choose prediction date">
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setViewDate(new Date(year, month - 1, 1))}
+          className="w-8 h-8 rounded-lg border border-border/40 text-muted hover:text-foreground hover:bg-surface-hover flex items-center justify-center"
+          aria-label="Previous month"
+        >
+          <span className="sr-only">Previous month</span>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <div className="text-sm font-black text-foreground">{MONTHS[month]} {year}</div>
+        <button
+          type="button"
+          onClick={() => setViewDate(new Date(year, month + 1, 1))}
+          className="w-8 h-8 rounded-lg border border-border/40 text-muted hover:text-foreground hover:bg-surface-hover flex items-center justify-center"
+          aria-label="Next month"
+        >
+          <span className="sr-only">Next month</span>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-px mb-1">
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+          <div key={day} className="py-1 text-center text-[9px] font-black uppercase tracking-wider text-muted/60">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-px">
+        {Array.from({ length: firstDay }, (_, i) => {
+          const day = prevMonthDays - firstDay + i + 1;
+          const optionDate = new Date(year, month - 1, day);
+          const iso = toIsoDate(optionDate);
+          return (
+            <button
+              key={`prev-${day}`}
+              type="button"
+              onClick={() => selectDate(optionDate)}
+              className="aspect-square rounded-lg text-[11px] font-bold text-muted/35 hover:bg-surface-hover hover:text-muted"
+              aria-label={`Select ${formatDateLabel(iso)}`}
+            >
+              {day}
+            </button>
+          );
+        })}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const optionDate = new Date(year, month, day);
+          const iso = toIsoDate(optionDate);
+          const selected = iso === selectedDate;
+          const today = iso === todayIso;
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => selectDate(optionDate)}
+              aria-pressed={selected}
+              aria-label={`Select ${formatDateLabel(iso)}`}
+              className={`relative aspect-square rounded-lg text-[12px] font-black transition-colors ${
+                selected
+                  ? "bg-accent text-white"
+                  : today
+                    ? "bg-accent/15 text-accent"
+                    : "text-foreground hover:bg-accent/10 hover:text-accent"
+              }`}
+            >
+              {day}
+              {today && !selected && <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
+        <button
+          type="button"
+          onClick={() => selectDate(new Date())}
+          className="rounded-xl bg-accent/10 py-2 text-[11px] font-black text-accent hover:bg-accent/20"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl bg-surface-hover py-2 text-[11px] font-black text-muted hover:text-foreground"
+        >
+          Close
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -444,11 +635,15 @@ function AiPredict() {
     return nodes;
   }
 
+  const sourceSummary = sources.length
+    ? sources.map((source) => `${source.label} (${source.status})`).join(", ")
+    : "API-Sports recent form/H2H when matched; The Odds API when configured";
+
   const examples = [
     "Arsenal vs Chelsea, Premier League — who will win?",
     "Man City home to Liverpool — predict the scoreline",
     "Real Madrid vs Bayern Munich, will there be over 2.5 goals?",
-    "Novak Djokovic vs Carlos Alcaraz at Wimbledon — your prediction?",
+    "Lakers vs Celtics — estimate the win probability range",
   ];
 
   return (
@@ -461,7 +656,7 @@ function AiPredict() {
         <div>
           <div className="text-sm font-black text-foreground mb-1">AI Prediction Assistant</div>
           <div className="text-xs text-muted font-medium leading-relaxed">
-            Describe any match or ask a prediction question. Our AI analyst will give you a structured pick, reasoning, and estimated odds.
+            Describe any match or ask a prediction question. The response includes a tip, probability range, key factors, fair odds estimate, and source freshness.
           </div>
         </div>
       </div>
@@ -469,7 +664,8 @@ function AiPredict() {
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Sport selector */}
-        <div className="flex gap-2 flex-wrap">
+        <fieldset className="flex gap-2 flex-wrap">
+          <legend className="sr-only">Choose sport for AI prediction</legend>
           {AI_SPORTS.map((item) => (
             <button key={item.label} type="button" onClick={() => item.supported && setSport(item.label)}
               disabled={!item.supported}
@@ -483,12 +679,14 @@ function AiPredict() {
                     : "glass border border-border/30 text-muted/40 cursor-not-allowed"
               }`}>{item.label}</button>
           ))}
-        </div>
+        </fieldset>
 
         {/* Prompt textarea */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
+            <label htmlFor="ai-predict-prompt" className="sr-only">Prediction question</label>
             <textarea
+              id="ai-predict-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && prompt.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
@@ -502,9 +700,10 @@ function AiPredict() {
           <button
             type="submit"
             disabled={!prompt.trim() || streaming}
+            aria-busy={streaming}
             className="flex min-h-[52px] sm:w-36 items-center justify-center gap-2 px-5 py-3 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-black rounded-xl transition-all hover:-translate-y-0.5 shadow-sm"
           >
-            <AiIcon className="w-4 h-4" />
+            {streaming ? <LoadingSpinner className="w-4 h-4" /> : <AiIcon className="w-4 h-4" />}
             {streaming ? "Analysing…" : "Ask AI"}
           </button>
         </div>
@@ -539,13 +738,13 @@ function AiPredict() {
             <AiIcon className="w-4 h-4 text-accent" />
             <span className="text-xs font-black text-accent uppercase tracking-wider">AI Analysis</span>
             {streaming && (
-              <span className="ml-auto flex items-center gap-1.5 text-[10px] text-muted">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                Thinking…
+              <span className="ml-auto flex items-center gap-1.5 text-[10px] text-muted" role="status" aria-live="polite">
+                <LoadingSpinner className="w-3.5 h-3.5 text-accent" />
+                Checking form, H2H, and odds feeds…
               </span>
             )}
           </div>
-          <div ref={outputRef} className="px-5 py-4 max-h-[420px] overflow-y-auto no-scrollbar space-y-0.5">
+          <div ref={outputRef} aria-live="polite" className="px-5 py-4 max-h-[420px] overflow-y-auto no-scrollbar space-y-0.5">
             {renderOutput(output)}
             {streaming && !output && (
               <div className="flex gap-1 py-2">
@@ -559,13 +758,11 @@ function AiPredict() {
             <div className="px-5 py-3 border-t border-border/30 flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <span className="block text-[10px] text-muted/60 font-medium">
-                  AI estimate, no live bookmaker feed{generatedAt ? ` · ${new Date(generatedAt).toLocaleString("en-GB")}` : ""} — verify independently
+                  AI estimate, not betting advice{generatedAt ? ` · generated ${new Date(generatedAt).toLocaleString("en-GB")}` : ""}. API-Sports cache up to 1 hour; odds are checked at request time when configured.
                 </span>
-                {sources.length > 0 && (
-                  <span className="mt-1 block text-[10px] text-muted/60 truncate">
-                    Sources: {sources.map((source) => `${source.label} (${source.status})`).join(", ")}
-                  </span>
-                )}
+                <span className="mt-1 block text-[10px] text-muted/60 truncate">
+                  Sources: {sourceSummary}
+                </span>
               </div>
               <button onClick={() => { setOutput(""); setPrompt(""); }}
                 className="shrink-0 text-xs font-bold text-accent hover:underline">New prediction →</button>

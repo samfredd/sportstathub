@@ -238,16 +238,16 @@ function ActivityChart({ chartData }: { chartData: Array<{ day: string; clicks: 
       <div className="flex items-center justify-between mb-4">
         <p className="text-[11px] font-black text-muted uppercase tracking-widest">7-Day Activity</p>
         <div className="flex items-center gap-3 text-[10px] text-muted font-bold">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent/60 inline-block" />Clicks</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400/70 inline-block" />Conversions</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-chart-3 inline-block" />Clicks</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-chart-1 inline-block" />Conversions</span>
         </div>
       </div>
-      <div className="flex items-end gap-1.5 h-28">
+      <div className="flex items-end gap-1.5 h-28" role="img" aria-label="Seven day activity chart showing clicks and conversions">
         {chartData.map((d) => (
           <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5">
             <div className="w-full flex items-end gap-0.5 h-20">
-              <div className="flex-1 bg-accent/25 hover:bg-accent/45 rounded-sm transition-all" style={{ height: `${(d.clicks / maxVal) * 100}%`, minHeight: d.clicks > 0 ? "3px" : "0" }} title={`${d.clicks} clicks`} />
-              <div className="flex-1 bg-emerald-400/50 hover:bg-emerald-400/70 rounded-sm transition-all" style={{ height: `${(d.conversions / maxVal) * 100}%`, minHeight: d.conversions > 0 ? "3px" : "0" }} title={`${d.conversions} conversions`} />
+              <div className="flex-1 bg-chart-3 hover:opacity-85 rounded-sm transition-all" style={{ height: `${(d.clicks / maxVal) * 100}%`, minHeight: d.clicks > 0 ? "3px" : "0" }} title={`${d.clicks} clicks`} aria-label={`${d.day}: ${d.clicks} clicks`} />
+              <div className="flex-1 bg-chart-1 hover:opacity-85 rounded-sm transition-all" style={{ height: `${(d.conversions / maxVal) * 100}%`, minHeight: d.conversions > 0 ? "3px" : "0" }} title={`${d.conversions} conversions`} aria-label={`${d.day}: ${d.conversions} conversions`} />
             </div>
             <span className="text-[9px] text-muted font-bold">{d.day}</span>
           </div>
