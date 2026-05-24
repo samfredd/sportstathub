@@ -343,8 +343,15 @@ jobs:
             export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
 
             docker network inspect web >/dev/null 2>&1 || docker network create web
-            docker compose -f docker-compose.prod.yml pull backend frontend ai-service oddswitch-api oddswitch-worker oddswitch-browser-worker
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            AVAILABLE_SERVICES="$(docker compose -f docker-compose.prod.yml config --services)"
+            DEPLOY_SERVICES=""
+            for service in backend frontend ai-service oddswitch-api oddswitch-worker oddswitch-browser-worker; do
+              if printf '%s\n' "$AVAILABLE_SERVICES" | grep -qx "$service"; then
+                DEPLOY_SERVICES="$DEPLOY_SERVICES $service"
+              fi
+            done
+            docker compose -f docker-compose.prod.yml pull $DEPLOY_SERVICES
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans $DEPLOY_SERVICES
 
             sleep 5
             curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/health" >/dev/null
