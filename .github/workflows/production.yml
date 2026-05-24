@@ -325,7 +325,7 @@ jobs:
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          password: ${{ secrets.PRODUCTION_PASSWORD }}
           envs: APP_DIR,DEPLOY_REF,DEPLOY_MODE,IMAGE_REGISTRY,IMAGE_NAMESPACE,IMAGE_TAG,DEPLOY_DOMAIN,DEPLOY_ACME_EMAIL,GHCR_USER,GHCR_TOKEN
           script: |
             cd "$APP_DIR"
