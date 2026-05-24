@@ -328,6 +328,25 @@ jobs:
           password: ${{ secrets.PRODUCTION_PASSWORD }}
           envs: APP_DIR,DEPLOY_REF,DEPLOY_MODE,IMAGE_REGISTRY,IMAGE_NAMESPACE,IMAGE_TAG,DEPLOY_DOMAIN,DEPLOY_ACME_EMAIL,GHCR_USER,GHCR_TOKEN
           script: |
+            set -euo pipefail
             cd "$APP_DIR"
             echo "$GHCR_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GHCR_USER" --password-stdin
-            bash deploy/deploy.sh
+
+            if [ -f .env ]; then
+              set -a
+              . ./.env
+              set +a
+            fi
+
+            export IMAGE_REGISTRY IMAGE_NAMESPACE IMAGE_TAG
+            export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
+            export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
+
+            docker network inspect web >/dev/null 2>&1 || docker network create web
+            docker compose -f docker-compose.prod.yml pull backend frontend ai-service oddswitch-api oddswitch-worker oddswitch-browser-worker
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            sleep 5
+            curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/health" >/dev/null
+            curl -sfk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" >/dev/null
+            docker compose -f docker-compose.prod.yml ps
