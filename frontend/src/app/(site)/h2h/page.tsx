@@ -27,12 +27,25 @@ export default function H2HPage() {
     setError(null);
     setH2hData(null);
     try {
-      const res = await fetch(`${BASE}/api/h2h?team1=${teamA.id}&team2=${teamB.id}&last=15`, withAuth());
-      if (!res.ok) throw new Error();
-      const { data } = await res.json();
-      setH2hData(data || []);
-    } catch {
-      setError("Could not fetch H2H data. Please try again.");
+      const params = new URLSearchParams({
+        team1: String(teamA.id),
+        team2: String(teamB.id),
+        last: "15",
+      });
+      const res = await fetch(`${BASE}/api/h2h?${params}`, withAuth());
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || json.message || "Could not fetch H2H data.");
+      }
+      const data = json.data || [];
+      if (!data.length) {
+        setError(`No recent head-to-head meetings were found for ${teamA.name} and ${teamB.name}. Try increasing the search scope or choosing different teams.`);
+        setH2hData([]);
+        return;
+      }
+      setH2hData(data);
+    } catch (e) {
+      setError(e?.message || "Could not fetch H2H data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -122,7 +135,7 @@ export default function H2HPage() {
         )}
 
         {/* Results */}
-        {stats && !loading && (
+        {stats && stats.total > 0 && !loading && (
           <div className="space-y-5">
             {/* Score banner */}
             <div className="glass border border-border/30 rounded-2xl overflow-hidden">
@@ -209,7 +222,7 @@ export default function H2HPage() {
         )}
 
         {/* Empty state */}
-        {!h2hData && !loading && !error && (
+        {(!h2hData || h2hData.length === 0) && !loading && !error && (
           <div className="glass border border-border/40 rounded-2xl py-24 text-center flex flex-col items-center gap-5 relative overflow-hidden shadow-sm">
             <div className="absolute inset-0 bg-gradient-to-b from-accent/5 to-transparent pointer-events-none" />
             <div className="w-20 h-20 rounded-2xl bg-surface border border-border/60 flex items-center justify-center shadow-inner relative z-10 group hover:border-accent/30 transition-colors">
@@ -239,6 +252,7 @@ function TeamPicker({ label, accentClass, query, onQuery, selected, suggestions,
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder={`Search ${label}…`}
+          aria-label={`Search ${label}`}
           className="flex-1 bg-transparent text-sm font-bold text-foreground focus:outline-none placeholder:text-muted/40"
         />
         {selected && <span className="text-accent text-xs font-black shrink-0">✓</span>}

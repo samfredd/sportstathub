@@ -24,7 +24,8 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
-        <main className="flex-1 w-full relative">
+        <a href="#main-content" className="skip-link">Skip to content</a>
+        <main id="main-content" className="flex-1 w-full relative">
           {children}
         </main>
       </body>

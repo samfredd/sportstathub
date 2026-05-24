@@ -4,6 +4,11 @@ export function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export function hasAuthToken(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.localStorage.getItem("token"));
+}
+
 export function withAuth(init: RequestInit = {}): RequestInit {
   return {
     ...init,

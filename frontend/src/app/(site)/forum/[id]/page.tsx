@@ -29,18 +29,21 @@ export default function ForumThreadPage() {
     queueMicrotask(() => {
       if (active) setLoading(true);
     });
-    Promise.all([
-      communityApi.getThread(id),
-      communityApi.getThreads(),
-      communityApi.getComments('thread', id).catch(() => []),
-    ])
-      .then(([data, threads, loadedComments]) => {
+    communityApi.getThread(id)
+      .then((data) => {
         if (!active) return;
         setThread(data);
-        setRelatedThreads((Array.isArray(threads) ? threads : [])
-          .filter(t => t.id !== data.id && t.category === data.category)
-          .slice(0, 3));
-        setComments(Array.isArray(loadedComments) ? loadedComments : []);
+        setLoading(false);
+        void Promise.all([
+          communityApi.getThreads().catch(() => []),
+          communityApi.getComments('thread', id).catch(() => []),
+        ]).then(([threads, loadedComments]) => {
+          if (!active) return;
+          setRelatedThreads((Array.isArray(threads) ? threads : [])
+            .filter(t => t.id !== data.id && t.category === data.category)
+            .slice(0, 3));
+          setComments(Array.isArray(loadedComments) ? loadedComments : []);
+        });
       })
       .catch(() => {
         if (active) setThread(null);

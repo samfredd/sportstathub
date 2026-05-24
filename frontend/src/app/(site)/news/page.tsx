@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { sanitizeText } from "@/lib/text";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -65,7 +66,7 @@ function NewsCard({ item, featured = false }: { item: NewsItem; featured?: boole
             {item.title}
           </h2>
           {item.description && (
-            <p className="text-[12px] text-muted leading-relaxed line-clamp-2">{item.description}</p>
+            <p className="text-[12px] text-muted leading-relaxed line-clamp-2">{sanitizeText(item.description)}</p>
           )}
         </div>
       </Link>
@@ -96,7 +97,7 @@ function NewsCard({ item, featured = false }: { item: NewsItem; featured?: boole
           {item.title}
         </p>
         {item.description && (
-          <p className="text-[11px] text-muted leading-relaxed line-clamp-1">{item.description}</p>
+          <p className="text-[11px] text-muted leading-relaxed line-clamp-1">{sanitizeText(item.description)}</p>
         )}
       </div>
     </Link>
@@ -143,7 +144,8 @@ export default function NewsPage() {
     if (source !== "All" && item.source !== source) return false;
     if (search) {
       const q = search.toLowerCase();
-      if (!item.title.toLowerCase().includes(q) && !item.description.toLowerCase().includes(q)) return false;
+      const description = sanitizeText(item.description).toLowerCase();
+      if (!item.title.toLowerCase().includes(q) && !description.includes(q)) return false;
     }
     return true;
   });

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { communityApi } from "@/lib/communityApi";
+import { hasAuthToken } from "@/lib/authHeaders";
 
 function timeAgo(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -149,6 +150,7 @@ export default function CommentSection({ comments = [], predictionId, targetType
   const [newComment, setNewComment] = useState("");
   const [localComments, setLocalComments] = useState<Comment[]>(comments);
   const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     setLocalComments(comments);
@@ -164,6 +166,11 @@ export default function CommentSection({ comments = [], predictionId, targetType
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!newComment.trim()) return;
+    setFeedback("");
+    if (!hasAuthToken()) {
+      setFeedback("Please sign in to comment.");
+      return;
+    }
     setSubmitting(true);
     // Optimistic add
     const optimistic: Comment = {
@@ -183,14 +190,20 @@ export default function CommentSection({ comments = [], predictionId, targetType
         content: optimistic.content,
       });
       setLocalComments(prev => prev.map(c => c.id === optimistic.id ? saved : c));
-    } catch {
+    } catch (error: any) {
       setLocalComments(prev => prev.filter(c => c.id !== optimistic.id));
+      setFeedback(error?.message || "Could not post your comment. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleReply(parentId: string | number, content: string) {
+    setFeedback("");
+    if (!hasAuthToken()) {
+      setFeedback("Please sign in to reply.");
+      return;
+    }
     const optimistic: Comment = {
       id: `local_${Date.now()}`,
       parentId: String(parentId),
@@ -209,8 +222,9 @@ export default function CommentSection({ comments = [], predictionId, targetType
         content,
       });
       setLocalComments(prev => replaceComment(prev, optimistic.id, saved));
-    } catch {
+    } catch (error: any) {
       setLocalComments(prev => removeComment(prev, optimistic.id));
+      setFeedback(error?.message || "Could not post your reply. Please try again.");
     }
   }
 
@@ -249,6 +263,11 @@ export default function CommentSection({ comments = [], predictionId, targetType
           </button>
         </div>
       </form>
+      {feedback && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300" role="status">
+          {feedback}
+        </div>
+      )}
 
       {/* Comments list */}
       <div className="space-y-3">

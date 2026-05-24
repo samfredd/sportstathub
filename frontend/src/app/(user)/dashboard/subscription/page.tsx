@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { communityApi } from "@/lib/communityApi";
 import { billingApi } from "@/lib/billingApi";
+import { DISPLAY_CURRENCIES, useDisplayCurrency } from "@/lib/currency";
 
 interface Profile {
   subscription_plan: string | null;
@@ -28,6 +29,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const { currency: displayCurrency, setCurrency: setDisplayCurrency, formatUsd, liveRates } = useDisplayCurrency();
   const [message, setMessage] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
@@ -78,6 +80,11 @@ export default function SubscriptionPage() {
   const formatPrice = (amount: number, currency = "USD") =>
     new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
   const planPrice = (plan: Plan) => billingInterval === "yearly" ? Number(plan.price_yearly) : Number(plan.price_monthly);
+  const displayPrice = (plan: Plan) => {
+    const amount = planPrice(plan);
+    if ((plan.currency || "USD").toUpperCase() !== "USD") return formatPrice(amount, plan.currency);
+    return formatUsd(amount);
+  };
 
   async function startCheckout(plan: Plan) {
     setCheckoutLoading(plan.slug);
@@ -152,16 +159,30 @@ export default function SubscriptionPage() {
             <>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-black text-muted uppercase tracking-widest">Upgrade Options</p>
-                <div className="flex rounded-xl border border-border/30 bg-surface/40 p-1">
-                  {(["monthly", "yearly"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setBillingInterval(mode)}
-                      className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${billingInterval === mode ? "bg-accent text-white" : "text-muted hover:text-foreground"}`}
-                    >
-                      {mode === "monthly" ? "Monthly" : "Yearly"}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <label className="sr-only" htmlFor="display-currency">Display currency</label>
+                  <select
+                    id="display-currency"
+                    value={displayCurrency}
+                    onChange={(e) => setDisplayCurrency(e.target.value as any)}
+                    title={liveRates ? "Converted with live USD exchange rates. Checkout is billed in USD." : "Converted with fallback exchange rates. Checkout is billed in USD."}
+                    className="rounded-xl border border-border/30 bg-surface/70 px-3 py-2 text-[11px] font-black text-foreground outline-none focus:border-accent/50"
+                  >
+                    {DISPLAY_CURRENCIES.map((item) => (
+                      <option key={item.code} value={item.code}>{item.label}</option>
+                    ))}
+                  </select>
+                  <div className="flex rounded-xl border border-border/30 bg-surface/40 p-1">
+                    {(["monthly", "yearly"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setBillingInterval(mode)}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${billingInterval === mode ? "bg-accent text-white" : "text-muted hover:text-foreground"}`}
+                      >
+                        {mode === "monthly" ? "Monthly" : "Yearly"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -181,8 +202,11 @@ export default function SubscriptionPage() {
                           <p className="text-sm text-muted mt-0.5">Cancel anytime</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-black text-accent">{formatPrice(planPrice(plan), plan.currency)}</p>
+                          <p className="text-2xl font-black text-accent">{displayPrice(plan)}</p>
                           <p className="text-[11px] text-muted">{intervalLabel}</p>
+                          {displayCurrency !== (plan.currency || "USD").toUpperCase() && (
+                            <p className="text-[10px] text-muted/70">Billed in {plan.currency || "USD"}</p>
+                          )}
                         </div>
                       </div>
                       <ul className="space-y-1.5 mb-5">

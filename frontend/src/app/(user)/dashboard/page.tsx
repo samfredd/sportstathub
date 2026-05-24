@@ -77,7 +77,7 @@ export default function DashboardOverviewPage() {
             {[
               { label: "Clicks",      value: Number(dashboard.overview.totalClicks      ?? 0).toLocaleString(), change: dashboard.overview.weeklyChange?.clicks },
               { label: "Conversions", value: Number(dashboard.overview.totalConversions ?? 0).toLocaleString(), change: dashboard.overview.weeklyChange?.conversions },
-              { label: "Earnings",    value: `₦${Number(dashboard.overview.estimatedEarnings ?? 0).toLocaleString()}`, change: dashboard.overview.weeklyChange?.earnings },
+              { label: "Earnings",    value: `${dashboard.overview.currency ?? "$"}${Number(dashboard.overview.estimatedEarnings ?? 0).toLocaleString()}`, change: dashboard.overview.weeklyChange?.earnings },
               { label: "Win Rate",    value: `${dashboard.overview.winRate ?? 0}%`, accent: true },
             ].map((k: any) => (
               <StatCard key={k.label} label={k.label} value={k.value} change={k.change} accent={k.accent} />
@@ -104,7 +104,7 @@ export default function DashboardOverviewPage() {
                       </div>
                       <p className="text-[10px] text-muted mt-0.5">{code.clicks?.toLocaleString()} clicks · {code.successRate}% success</p>
                     </div>
-                    <span className="text-[13px] font-black text-accent shrink-0">₦{code.earnings?.toLocaleString()}</span>
+                    <span className="text-[13px] font-black text-accent shrink-0">{dashboard.overview.currency ?? "$"}{code.earnings?.toLocaleString()}</span>
                   </div>
                 ))}
               </div>

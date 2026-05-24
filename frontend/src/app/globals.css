@@ -217,6 +217,11 @@
   html {
     @apply font-sans;
   }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
 }
 
 /* =========================
@@ -224,6 +229,17 @@
    ========================= */
 
 @layer components {
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] rounded-md bg-surface px-4 py-2 text-sm font-semibold text-foreground shadow-premium;
+    transform: translateY(-150%);
+    transition: transform 150ms ease;
+  }
+
+  .skip-link:focus,
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+
   /* Glass */
   .glass {
     @apply backdrop-blur-xl border;

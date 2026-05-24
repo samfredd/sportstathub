@@ -96,7 +96,11 @@ export default function Navbar() {
                   {label}
                 </NavLink>
               ))}
-              <button className="ml-3 px-3 py-1.5 bg-accent-gold/10 text-accent-gold text-[10px] font-black rounded-lg hover:bg-accent-gold/20 transition-all flex items-center gap-1.5 border border-accent-gold/25 cursor-pointer">
+              <button
+                className="ml-3 px-3 py-1.5 bg-accent-gold/10 text-accent-gold text-[10px] font-black rounded-lg hover:bg-accent-gold/20 transition-all flex items-center gap-1.5 border border-accent-gold/25 cursor-pointer"
+                aria-label="Open Pro plan details"
+                title="Open Pro plan details"
+              >
                 <LockIcon className="w-3 h-3" /> PRO
               </button>
             </div>

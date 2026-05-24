@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { sanitizeText } from "@/lib/text";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -165,7 +166,7 @@ export default function NewsDetailPage() {
 
         {article.description && (
           <p className="text-base text-foreground/80 leading-relaxed border-l-2 border-accent/40 pl-4">
-            {article.description}
+            {sanitizeText(article.description)}
           </p>
         )}
       </div>

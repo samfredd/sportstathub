@@ -149,6 +149,8 @@ export default function MobileBottomBar() {
           {/* More button */}
           <button
             onClick={() => setOpen((v) => !v)}
+            aria-label={open ? "Close more navigation" : "Open more navigation"}
+            aria-expanded={open}
             className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all ${
               moreActive ? "text-accent" : "text-muted hover:text-foreground"
             }`}

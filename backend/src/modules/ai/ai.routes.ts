@@ -1,6 +1,209 @@
 import fp from 'fastify-plugin';
 import config from '../../config/env.config.js';
 import { createFootballService } from '../football/football.service.js';
+import { createOddsService } from '../odds/odds.service.js';
+
+const SUPPORTED_AI_SPORTS: Record<string, string> = {
+  football: 'football',
+  soccer: 'football',
+  basketball: 'basketball',
+  baseball: 'baseball',
+  hockey: 'hockey',
+  volleyball: 'volleyball',
+};
+
+const DEFAULT_ODDS_SPORT_KEYS: Record<string, string> = {
+  football: 'soccer_epl',
+  basketball: 'basketball_nba',
+  baseball: 'baseball_mlb',
+  hockey: 'icehockey_nhl',
+};
+
+export function normalizeAiSport(sport = 'Football'): string | null {
+  return SUPPORTED_AI_SPORTS[String(sport).trim().toLowerCase()] ?? null;
+}
+
+export function resolveOddsSportKey(sportId: string): string | null {
+  const overrideKey = `AI_ODDS_${sportId.toUpperCase()}_KEY`;
+  return process.env[overrideKey] || DEFAULT_ODDS_SPORT_KEYS[sportId] || null;
+}
+
+function cleanTeamName(value: string): string {
+  return value
+    .split(/[,\u2014?]/)[0]
+    .replace(/\b(prediction|predict|odds|who wins|who will win|will there be|today|tonight)\b.*$/i, '')
+    .replace(/^(please|predict|prediction for|what about|give me)\s+/i, '')
+    .trim();
+}
+
+export function extractMatchup(prompt: string): { homeName: string; awayName: string } | null {
+  const match = String(prompt)
+    .replace(/\s+/g, ' ')
+    .match(/(.{2,70}?)\s+(?:vs\.?|v\.?|versus|against)\s+(.{2,90})/i);
+
+  if (!match) return null;
+  const homeName = cleanTeamName(match[1]);
+  const awayName = cleanTeamName(match[2]);
+  if (homeName.length < 2 || awayName.length < 2) return null;
+  return { homeName, awayName };
+}
+
+function normalizeTeamSearchResult(item: any) {
+  const team = item?.team ?? item ?? {};
+  return {
+    id: Number(team.id),
+    name: team.name,
+    country: team.country?.name ?? team.country ?? item?.country?.name ?? item?.country ?? '',
+  };
+}
+
+function summarizeFixtures(fixtures: any[], teamId: number, limit = 5): string {
+  return fixtures.slice(0, limit).map((f: any) => {
+    const isHome = f.teams?.home?.id === teamId;
+    const tg = isHome ? f.goals?.home : f.goals?.away;
+    const og = isHome ? f.goals?.away : f.goals?.home;
+    const opp = isHome ? f.teams?.away?.name : f.teams?.home?.name;
+    const result = tg > og ? 'W' : tg < og ? 'L' : 'D';
+    return `  ${f.fixture?.date?.slice(0, 10) ?? ''} ${isHome ? 'vs' : '@'} ${opp ?? 'Opponent'} ${tg ?? '?'}-${og ?? '?'} [${result}]`;
+  }).join('\n');
+}
+
+function findRelevantOddsEvents(events: any[] = [], matchup: { homeName: string; awayName: string }) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const home = normalize(matchup.homeName);
+  const away = normalize(matchup.awayName);
+  return events.filter((event: any) => {
+    const text = normalize(`${event.home_team ?? ''} ${event.away_team ?? ''}`);
+    return text.includes(home) || text.includes(away);
+  }).slice(0, 3);
+}
+
+function summarizeOdds(events: any[] = []) {
+  return events.map((event: any) => {
+    const markets = (event.bookmakers ?? [])
+      .slice(0, 3)
+      .flatMap((bookmaker: any) => (bookmaker.markets ?? []).map((market: any) => {
+        const outcomes = (market.outcomes ?? [])
+          .map((outcome: any) => `${outcome.name} ${outcome.price}`)
+          .join(', ');
+        return `${bookmaker.title} ${market.key}: ${outcomes}`;
+      }));
+    return `  ${event.home_team} vs ${event.away_team} (${event.commence_time ?? 'time unavailable'})
+${markets.slice(0, 6).map((line: string) => `    ${line}`).join('\n') || '    No bookmaker markets returned.'}`;
+  }).join('\n');
+}
+
+async function buildOddsContext(oddsService: any, matchup: { homeName: string; awayName: string } | null, sportId: string, generatedAt: string) {
+  if (!oddsService) {
+    return {
+      text: 'Live bookmaker odds source: unavailable because ODDS_API_KEY is not configured.',
+      sources: [{ label: 'The Odds API', status: 'not_configured', generatedAt }],
+    };
+  }
+  const oddsSportKey = resolveOddsSportKey(sportId);
+  if (!oddsSportKey) {
+    return {
+      text: `Live bookmaker odds source: not mapped for ${sportId}.`,
+      sources: [{ label: 'The Odds API', status: 'not_mapped', generatedAt }],
+    };
+  }
+  if (!matchup) {
+    return {
+      text: 'Live bookmaker odds source: skipped because no team-vs-team matchup was parsed.',
+      sources: [{ label: 'The Odds API', status: 'skipped_no_matchup', generatedAt }],
+    };
+  }
+
+  try {
+    const odds = await oddsService.getOdds(oddsSportKey, 'us,uk,eu', 'h2h,totals,spreads');
+    const relevant = findRelevantOddsEvents(Array.isArray(odds) ? odds : [], matchup);
+    if (!relevant.length) {
+      return {
+        text: `Live bookmaker odds source: checked ${oddsSportKey}, but no matching events were found for ${matchup.homeName} vs ${matchup.awayName}.`,
+        sources: [{ label: `The Odds API ${oddsSportKey}`, status: 'no_match', generatedAt }],
+      };
+    }
+    return {
+      text: `Live bookmaker odds source: The Odds API ${oddsSportKey}. Last checked: ${generatedAt}.
+${summarizeOdds(relevant)}`,
+      sources: [{ label: `The Odds API ${oddsSportKey}`, status: 'available', generatedAt }],
+    };
+  } catch (error: any) {
+    return {
+      text: `Live bookmaker odds source: unavailable (${error?.message ?? 'unknown error'}). Do not invent bookmaker prices.`,
+      sources: [{ label: `The Odds API ${oddsSportKey}`, status: 'unavailable', generatedAt }],
+    };
+  }
+}
+
+async function buildFreeTextDataContext(footballService: any, oddsService: any, userPrompt: string, sportId: string) {
+  const matchup = extractMatchup(userPrompt);
+  const generatedAt = new Date().toISOString();
+  const oddsContext = await buildOddsContext(oddsService, matchup, sportId, generatedAt);
+  if (!matchup) {
+    return {
+      generatedAt,
+      contextText: `## Data Context\nNo team-vs-team matchup was confidently parsed from the prompt. Treat this as a low-data estimate and do not cite team form, injuries, odds, or bookmaker prices.\n${oddsContext.text}`,
+      sources: [{ label: 'User prompt only', status: 'limited', generatedAt }, ...oddsContext.sources],
+    };
+  }
+
+  try {
+    const [homeResults, awayResults] = await Promise.all([
+      footballService.searchTeams(matchup.homeName, sportId),
+      footballService.searchTeams(matchup.awayName, sportId),
+    ]);
+    const home = normalizeTeamSearchResult(homeResults?.[0]);
+    const away = normalizeTeamSearchResult(awayResults?.[0]);
+    if (!home.id || !away.id) {
+      return {
+        generatedAt,
+        contextText: `## Data Context\nCould not match one or both teams in API-Sports. Parsed matchup: ${matchup.homeName} vs ${matchup.awayName}. Do not invent form or historical stats.\n${oddsContext.text}`,
+        sources: [{ label: 'API-Sports team search', status: 'no_match', generatedAt }, ...oddsContext.sources],
+      };
+    }
+
+    const [h2h, homeForm, awayForm] = await Promise.all([
+      footballService.getH2H(home.id, away.id, 8, sportId).catch(() => []),
+      footballService.getTeamLastFixtures(home.id, 5, undefined, undefined, sportId).catch(() => []),
+      footballService.getTeamLastFixtures(away.id, 5, undefined, undefined, sportId).catch(() => []),
+    ]);
+    const played = Array.isArray(h2h) ? h2h.filter((f: any) => f.goals?.home !== null && f.goals?.away !== null) : [];
+    const totalGoals = played.reduce((sum: number, f: any) => sum + Number(f.goals?.home ?? 0) + Number(f.goals?.away ?? 0), 0);
+    const avgGoals = played.length ? (totalGoals / played.length).toFixed(1) : 'n/a';
+
+    return {
+      generatedAt,
+      contextText: `## Data Context
+Source: API-Sports ${sportId} endpoints. Last updated: ${generatedAt}.
+Parsed matchup: ${home.name} vs ${away.name}
+
+Head-to-head meetings found: ${played.length}
+Average combined score/goals in H2H: ${avgGoals}
+${played.slice(0, 5).map((f: any) => `  ${f.fixture?.date?.slice(0, 10) ?? ''} ${f.teams?.home?.name} ${f.goals?.home}-${f.goals?.away} ${f.teams?.away?.name}`).join('\n')}
+
+${home.name} recent form:
+${summarizeFixtures(homeForm, home.id) || '  No recent fixtures returned.'}
+
+${away.name} recent form:
+${summarizeFixtures(awayForm, away.id) || '  No recent fixtures returned.'}
+
+${oddsContext.text}`,
+      sources: [
+        { label: 'API-Sports team search', status: 'matched', generatedAt },
+        { label: 'API-Sports head-to-head', status: played.length ? 'available' : 'empty', generatedAt },
+        { label: 'API-Sports recent fixtures', status: 'available', generatedAt },
+        ...oddsContext.sources,
+      ],
+    };
+  } catch (error: any) {
+    return {
+      generatedAt,
+      contextText: `## Data Context\nAPI-Sports context could not be loaded: ${error?.message ?? 'unknown error'}. Treat this as a low-data estimate and do not cite unavailable stats.\n${oddsContext.text}`,
+      sources: [{ label: 'API-Sports', status: 'unavailable', generatedAt }, ...oddsContext.sources],
+    };
+  }
+}
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
@@ -219,6 +422,10 @@ async function aiRoutes(fastify: any) {
     sportsApiKey: config.sportsApiKey,
     redis:       fastify.redis,
   });
+  const oddsService = createOddsService({
+    apiKey: config.oddsApiKey,
+    redis: fastify.redis,
+  });
   const requireLiveAiAccess = fastify.requireFeatureAccess('live_ai', 'enterprise');
 
   fastify.get('/api/matches/:id/ai-prediction', {
@@ -347,6 +554,14 @@ async function aiRoutes(fastify: any) {
     },
   }, async (request: any, reply: any) => {
     const { prompt: userPrompt, sport = 'Football' } = request.body as { prompt: string; sport?: string };
+    const sportId = normalizeAiSport(sport);
+    if (!sportId) {
+      return reply.status(400).send({
+        status: 'error',
+        error: 'AI Predict currently supports Football, Basketball, Baseball, Hockey, and Volleyball.',
+      });
+    }
+    const dataContext = await buildFreeTextDataContext(footballService, oddsService, userPrompt, sportId);
 
     const systemPrompt = `You are an expert sports analyst. The user will describe a match or ask about a prediction.
 Give a concise, structured prediction with these sections:
@@ -357,7 +572,7 @@ Your main tip (e.g. "Home Win", "Over 2.5 Goals", "BTTS Yes").
 2–3 bullet points explaining why.
 
 ### Odds Estimate
-Estimated fair odds range (e.g. 1.70–1.90).
+Estimated decimal fair odds range (e.g. 1.70–1.90). Keep football 1X2 estimates in realistic bookmaker-style ranges; never output odds below 1.10, avoid exact single odds, and say "not enough data" if the prompt lacks context.
 
 ### Confidence
 Low / Medium / High — and the key uncertainty.
@@ -365,9 +580,13 @@ Low / Medium / High — and the key uncertainty.
 RULES:
 - Be honest about uncertainty — never guarantee outcomes.
 - Keep total response under 200 words.
-- Use hedged language ("likely", "suggests", "tends to").`;
+- Use hedged language ("likely", "suggests", "tends to").
+- Base claims on the Data Context when it is available.
+- Use live bookmaker odds only when The Odds API source is marked available in the Data Context.
+- Do not invent live odds, bookmaker prices, team form, injuries, or goal spreads when the user has not provided data.
+- If you estimate probabilities, make them plausible percentages that add up logically for the stated market.`;
 
-    const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}\nSport: ${sport}`;
+    const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}\nSport: ${sportId}\n\n${dataContext.contextText}`;
 
     reply.hijack();
     const raw = reply.raw;
@@ -422,7 +641,7 @@ RULES:
         }
       }
 
-      send({ done: true, analysis });
+      send({ done: true, analysis, sources: dataContext.sources, generatedAt: dataContext.generatedAt });
     } catch (e: any) {
       send({ error: e.message ?? 'AI service is currently unavailable.' });
     }

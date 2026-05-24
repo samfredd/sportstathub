@@ -88,7 +88,7 @@ export function CodeHub() {
       </div>
 
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <PremiumGate feature="Booking Codes" mode="replace" flagKey="booking_codes_copy">
+        <PremiumGate feature="Booking Codes" mode="blur" flagKey="booking_codes_copy">
           {tab === "converter" ? <ConverterTab /> : <BrowseTab />}
         </PremiumGate>
       </div>
@@ -142,6 +142,14 @@ function legStatusCls(s: string) {
   return                          "bg-danger/10      text-danger      border-danger/20";
 }
 
+function validateBookingCode(value: string): string | null {
+  const normalized = value.trim();
+  if (normalized.length < 4) return "Enter at least 4 characters. Booking codes are usually short letters and numbers from your bet slip.";
+  if (normalized.length > 30) return "Booking codes should be 30 characters or fewer. Paste only the booking code, not the full slip text.";
+  if (!/^[A-Z0-9_-]+$/i.test(normalized)) return "Use only letters, numbers, hyphens, or underscores. Remove spaces and other symbols.";
+  return null;
+}
+
 function ConverterTab() {
   const [code, setCode]         = useState("");
   const [from, setFrom]         = useState<OddswitchBookmaker>("SportyBet");
@@ -174,6 +182,10 @@ function ConverterTab() {
     try {
       const res  = await fetch(`${API_BASE}/api/codes/convert/${jobId}`, withAuth());
       const json = await res.json();
+      if (!res.ok) {
+        setJobState({ phase: "error", message: json.error ?? json.message ?? "Could not check conversion status. Please try again." });
+        return;
+      }
       const job  = json.data;
 
       if (job.status === "completed" && job.result) {
@@ -194,6 +206,11 @@ function ConverterTab() {
   async function handleConvert(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim() || from === to) return;
+    const validationError = validateBookingCode(code);
+    if (validationError) {
+      setJobState({ phase: "error", message: validationError });
+      return;
+    }
     if (pollTimer.current) clearTimeout(pollTimer.current);
     setJobState({ phase: "submitting" });
     setCopied(false);
@@ -207,7 +224,7 @@ function ConverterTab() {
       }));
       const json = await res.json();
       if (!res.ok) {
-        setJobState({ phase: "error", message: json.message ?? "Submission failed." });
+        setJobState({ phase: "error", message: json.error ?? json.message ?? "Submission failed. Check the code format and selected bookmakers." });
         return;
       }
       const job = json.data;
@@ -248,10 +265,17 @@ function ConverterTab() {
             className="w-full px-5 py-4 rounded-2xl bg-surface border border-border/60 text-foreground text-2xl font-mono tracking-[0.25em] outline-none transition-all duration-300 focus:border-accent focus:shadow-[0_0_0_4px_rgba(16,185,129,0.1)] uppercase placeholder:tracking-normal placeholder:text-base placeholder:font-sans placeholder:text-muted/40 disabled:opacity-50"
             placeholder="Enter code"
             value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
+            onChange={e => {
+              setCode(e.target.value.toUpperCase().replace(/\s+/g, ""));
+              if (jobState.phase === "error") reset();
+            }}
             maxLength={100}
             disabled={isLoading}
+            aria-describedby="booking-code-help"
           />
+          <p id="booking-code-help" className="text-[11px] text-muted leading-relaxed">
+            Paste only the booking code from SportyBet or Bet9ja. Letters, numbers, hyphens, and underscores are supported.
+          </p>
         </div>
 
         {/* Bookmaker direction — perfectly symmetric grid */}
@@ -266,6 +290,7 @@ function ConverterTab() {
               onClick={swap}
               disabled={isLoading}
               title="Swap bookmakers"
+              aria-label="Swap bookmakers"
               className="w-12 h-12 flex items-center justify-center rounded-2xl bg-surface border border-border/60 text-muted hover:text-accent hover:border-accent/40 hover:-rotate-180 transition-all duration-500 cursor-pointer disabled:opacity-40 shadow-sm group z-10"
             >
               <ArrowRightLeft className="w-5 h-5 transition-transform group-hover:scale-110" />

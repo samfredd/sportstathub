@@ -806,7 +806,7 @@ export const MOCK_FORUM_THREADS: ForumThread[] = [
   {
     id: 'thread_004',
     category: 'Betting Strategy',
-    title: "How I turned ₦20,000 into ₦180,000 in 6 weeks — My system explained",
+    title: "How I turned $20 into $180 in 6 weeks — My system explained",
     content: "Not clickbait. I've been using a modified Kelly Criterion system with strict bankroll management. Here's the full breakdown of every bet, unit size, and the reasoning...",
     author: c3,
     stats: { replies: 312, views: 14200, likes: 1023 },
@@ -870,7 +870,7 @@ export const MOCK_FORUM_COMMENTS: ForumComment[] = [
     id: 'cmt_001',
     threadId: 'thread_001',
     author: { id: 'u1', name: 'FootballFan99', initials: 'FF', avatarColor: 'from-blue-500 to-blue-700', badge: null },
-    content: "Totally agree with the Over 2.5 pick. Arsenal at home have been unstoppable this season. I'm putting ₦10k on this one.",
+    content: "Totally agree with the Over 2.5 pick. Arsenal at home have been unstoppable this season. I'm putting $10 on this one.",
     likes: 23,
     timestamp: '2026-04-28T07:30:00Z',
     replies: [
@@ -946,7 +946,7 @@ export const MOCK_DASHBOARD_STATS: DashboardStats = {
     totalConversions: 1234,
     conversionRate: 14.1,
     estimatedEarnings: 4875,
-    currency: '₦',
+    currency: '$',
     winRate: 68.5,
     activeCodes: 7,
     followersGained: 342,

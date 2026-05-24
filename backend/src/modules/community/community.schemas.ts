@@ -13,6 +13,9 @@ export const predictionsQuerySchema = {
   properties: {
     sport:     { type: 'string' },
     status:    { type: 'string' },
+    market:    { type: 'string' },
+    league:    { type: 'string' },
+    date:      { type: 'string', format: 'date' },
     creatorId:   { type: 'string', pattern: '^\\d+$' },
     creatorRole: { type: 'string' },
     limit:       { type: 'integer', minimum: 1, maximum: 100, default: 50 },

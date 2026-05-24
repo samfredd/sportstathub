@@ -152,7 +152,7 @@ export default function CreatorProfilePage() {
             sub={`+${Math.round(followerCount * 0.03)} this week`}
           />
           <ProfileStat
-            value={`₦${fmtCount(creator.stats.earnings)}`}
+            value={`$${fmtCount(creator.stats.earnings)}`}
             label="Earnings"
             sub="Est. affiliate revenue"
           />

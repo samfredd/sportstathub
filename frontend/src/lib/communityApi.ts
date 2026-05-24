@@ -1,4 +1,5 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const CACHE_PREFIX = "sportstathub:api:";
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
@@ -34,6 +35,41 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   return json.data ?? json;
 }
 
+function cacheKey(path: string): string {
+  const authScope = token() ? "auth" : "anon";
+  return `${CACHE_PREFIX}${authScope}:${path}`;
+}
+
+function readCache(path: string, maxAgeMs: number): any | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(cacheKey(path));
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached?.ts || Date.now() - cached.ts > maxAgeMs) return null;
+    return cached.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(path: string, data: any) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(cacheKey(path), JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Storage is best-effort only.
+  }
+}
+
+async function cachedApiFetch(path: string, maxAgeMs: number): Promise<any> {
+  const cached = readCache(path, maxAgeMs);
+  if (cached !== null) return cached;
+  const data = await apiFetch(path);
+  writeCache(path, data);
+  return data;
+}
+
 interface CreatePredictionBody {
   [key: string]: unknown;
 }
@@ -66,15 +102,18 @@ export const communityApi = {
     method: "POST",
   }),
 
-  getCreators: () => apiFetch("/api/creators"),
+  getCreators: () => cachedApiFetch("/api/creators", 5 * 60_000),
   getCreator: (id: string | number) => apiFetch(`/api/creators/${id}`),
-  getLeaderboard: () => apiFetch("/api/creators/leaderboard"),
+  getLeaderboard: () => cachedApiFetch("/api/creators/leaderboard", 5 * 60_000),
   getPlatformStats: () => apiFetch("/api/platform/stats"),
   getCreatorDashboard: () => apiFetch("/api/dashboard/creator"),
   getUserDashboard: () => apiFetch("/api/dashboard/me"),
 
-  getThreads: (params?: QueryParams) => apiFetch(`/api/forum/threads${query(params)}`),
-  getThread: (id: string | number) => apiFetch(`/api/forum/threads/${id}`),
+  getThreads: (params?: QueryParams) => {
+    const path = `/api/forum/threads${query(params)}`;
+    return cachedApiFetch(path, 60_000);
+  },
+  getThread: (id: string | number) => cachedApiFetch(`/api/forum/threads/${id}`, 60_000),
   createThread: (body: CreateThreadBody) => apiFetch("/api/forum/threads", {
     method: "POST",
     body: JSON.stringify(body),
@@ -83,7 +122,10 @@ export const communityApi = {
     method: "POST",
   }),
 
-  getComments: (targetType: string, targetId: string | number) => apiFetch(`/api/comments${query({ targetType, targetId })}`),
+  getComments: (targetType: string, targetId: string | number) => {
+    const path = `/api/comments${query({ targetType, targetId })}`;
+    return cachedApiFetch(path, 30_000);
+  },
   createComment: (body: CreateCommentBody) => apiFetch("/api/comments", {
     method: "POST",
     body: JSON.stringify(body),

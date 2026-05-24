@@ -99,7 +99,7 @@ function CreatorOverview({ dashboard, onViewTips }: { dashboard: any; onViewTips
         {[
           { label: "Clicks",      value: Number(overview.totalClicks ?? 0).toLocaleString() },
           { label: "Conversions", value: Number(overview.totalConversions ?? 0).toLocaleString() },
-          { label: "Earnings",    value: `₦${Number(overview.estimatedEarnings ?? 0).toLocaleString()}` },
+          { label: "Earnings",    value: `${overview.currency ?? "$"}${Number(overview.estimatedEarnings ?? 0).toLocaleString()}` },
           { label: "Win Rate",    value: `${overview.winRate ?? 0}%`, accent: true },
         ].map((k: any) => (
           <div key={k.label} className={`glass rounded-2xl p-5 border ${k.accent ? "border-accent/20 bg-accent/5" : "border-border/30"}`}>

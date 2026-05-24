@@ -23,7 +23,6 @@ async function footballRoutes(fastify) {
   });
   const ctrl = createFootballController(footballService);
   const requireAdvancedStats = fastify.requireFeatureAccess('advanced_stats', 'pro');
-  const requireH2HAccess = fastify.requireFeatureAccess('h2h_analyser', 'pro');
 
   // Sports
   fastify.get('/api/sports', {}, ctrl.getSports);
@@ -54,7 +53,7 @@ async function footballRoutes(fastify) {
   fastify.get('/api/teams/:id/fixtures', { schema: { params: teamParamSchema, querystring: teamFixturesQuerySchema } }, ctrl.getTeamFixtures);
 
   // Head-to-head
-  fastify.get('/api/h2h', { onRequest: [requireH2HAccess], schema: { querystring: h2hQuerySchema } }, ctrl.getH2H);
+  fastify.get('/api/h2h', { schema: { querystring: h2hQuerySchema } }, ctrl.getH2H);
 
   // Teams search (for H2H autocomplete)
   fastify.get('/api/teams/search', { schema: { querystring: teamsSearchSchema } }, ctrl.searchTeams);

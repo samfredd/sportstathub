@@ -65,7 +65,7 @@ const sportFilters: Array<{ label: string; value: Sport }> = [
   ...PREDICTION_SPORT_OPTIONS.map(({ label }) => ({ label, value: label })),
 ];
 
-const markets = ["All", "1X2", "Over/Under", "Handicap", "BTTS", "Player Props"];
+const markets = ["All", "1X2", "Moneyline", "Over/Under", "Totals", "Handicap", "Spread", "BTTS", "Player Props"];
 
 type RequestState = "idle" | "loading" | "ready" | "error";
 type ActiveTab = "tips" | "ai";
@@ -130,6 +130,12 @@ export function PredictionsHub() {
       { label: "With codes",      value: withCodes.toString() },
     ];
   }, [predictions]);
+
+  function shiftDate(days: number) {
+    const base = date ? new Date(`${date}T00:00:00`) : new Date();
+    base.setDate(base.getDate() + days);
+    setDate(base.toISOString().slice(0, 10));
+  }
 
   return (
     <div className="relative px-4 lg:px-6 pb-28 lg:pb-10 pt-4">
@@ -210,10 +216,18 @@ export function PredictionsHub() {
           </div>
 
           {/* Date */}
-          <div className="relative group">
-            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none group-focus-within:text-accent transition-colors" />
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="w-full glass border border-border/50 focus:border-accent/50 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-foreground focus:outline-none transition-colors bg-surface [color-scheme:dark]" />
+          <div className="space-y-2">
+            <div className="relative group">
+              <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none group-focus-within:text-accent transition-colors" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                aria-label="Prediction date"
+                className="w-full glass border border-border/50 focus:border-accent/50 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-foreground focus:outline-none transition-colors bg-surface [color-scheme:dark]" />
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <button type="button" onClick={() => shiftDate(-1)} title="Previous day" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Prev</button>
+              <button type="button" onClick={() => setDate(new Date().toISOString().slice(0, 10))} title="Jump to today" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Today</button>
+              <button type="button" onClick={() => shiftDate(1)} title="Next day" className="rounded-lg border border-border/40 bg-surface px-2 py-1 text-[10px] font-black text-muted hover:text-foreground">Next</button>
+            </div>
           </div>
         </div>
       </div>
@@ -323,7 +337,16 @@ function ExpertPicksStrip({ picks }: { picks: CommunityPrediction[] }) {
 }
 
 // ─── AI Predict tab ────────────────────────────────────────────
-const AI_SPORTS = ["Football", "Basketball", "Tennis", "Baseball", "Hockey", "Rugby", "Cricket"];
+const AI_SPORTS = [
+  { label: "Football", supported: true },
+  { label: "Basketball", supported: true },
+  { label: "Baseball", supported: true },
+  { label: "Hockey", supported: true },
+  { label: "Volleyball", supported: true },
+  { label: "Tennis", supported: false },
+  { label: "Rugby", supported: false },
+  { label: "Cricket", supported: false },
+];
 
 function AiPredict() {
   const [prompt, setPrompt]     = useState("");
@@ -331,6 +354,8 @@ function AiPredict() {
   const [streaming, setStreaming] = useState(false);
   const [output, setOutput]     = useState("");
   const [error, setError]       = useState("");
+  const [generatedAt, setGeneratedAt] = useState("");
+  const [sources, setSources] = useState<Array<{ label: string; status: string; generatedAt?: string }>>([]);
   const outputRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -339,6 +364,8 @@ function AiPredict() {
     setStreaming(true);
     setOutput("");
     setError("");
+    setGeneratedAt("");
+    setSources([]);
 
     try {
       const res = await fetch(`${API_BASE}/api/ai/predict`, {
@@ -369,6 +396,10 @@ function AiPredict() {
           try {
             const json = JSON.parse(trimmed.slice(5).trim());
             if (json.error) { setError(json.error); break; }
+            if (json.done) {
+              setGeneratedAt(json.generatedAt || new Date().toISOString());
+              setSources(Array.isArray(json.sources) ? json.sources : []);
+            }
             if (json.token) {
               setOutput((prev) => prev + json.token);
               // Auto-scroll
@@ -439,35 +470,44 @@ function AiPredict() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Sport selector */}
         <div className="flex gap-2 flex-wrap">
-          {AI_SPORTS.map((s) => (
-            <button key={s} type="button" onClick={() => setSport(s)}
+          {AI_SPORTS.map((item) => (
+            <button key={item.label} type="button" onClick={() => item.supported && setSport(item.label)}
+              disabled={!item.supported}
+              title={item.supported ? `Use ${item.label} data where available` : `${item.label} support is coming soon`}
+              aria-label={item.supported ? `Select ${item.label}` : `${item.label} coming soon`}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                sport === s ? "bg-accent text-white" : "glass border border-border/40 text-muted hover:text-foreground"
-              }`}>{s}</button>
+                sport === item.label
+                  ? "bg-accent text-white"
+                  : item.supported
+                    ? "glass border border-border/40 text-muted hover:text-foreground"
+                    : "glass border border-border/30 text-muted/40 cursor-not-allowed"
+              }`}>{item.label}</button>
           ))}
         </div>
 
         {/* Prompt textarea */}
-        <div className="relative">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && prompt.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
-            rows={3}
-            placeholder="e.g. Arsenal vs Chelsea, Premier League — who will win and why?"
-            className="w-full glass border border-border/40 focus:border-accent/50 rounded-2xl px-4 py-3.5 text-sm font-medium text-foreground placeholder:text-muted/40 focus:outline-none resize-none transition-colors"
-          />
-          <div className="absolute bottom-3 right-3 text-[10px] text-muted/40">{prompt.length}/1000</div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && prompt.trim()) { e.preventDefault(); handleSubmit(e as any); } }}
+              rows={3}
+              placeholder="e.g. Arsenal vs Chelsea, Premier League — who will win and why?"
+              title="Press Enter or use Ask AI to submit. Use Shift+Enter for a new line."
+              className="w-full glass border border-border/40 focus:border-accent/50 rounded-2xl px-4 py-3.5 text-sm font-medium text-foreground placeholder:text-muted/40 focus:outline-none resize-none transition-colors"
+            />
+            <div className="absolute bottom-3 right-3 text-[10px] text-muted/40">{prompt.length}/1000</div>
+          </div>
+          <button
+            type="submit"
+            disabled={!prompt.trim() || streaming}
+            className="flex min-h-[52px] sm:w-36 items-center justify-center gap-2 px-5 py-3 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-black rounded-xl transition-all hover:-translate-y-0.5 shadow-sm"
+          >
+            <AiIcon className="w-4 h-4" />
+            {streaming ? "Analysing…" : "Ask AI"}
+          </button>
         </div>
-
-        <button
-          type="submit"
-          disabled={!prompt.trim() || streaming}
-          className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-black rounded-xl transition-all hover:-translate-y-0.5 shadow-sm"
-        >
-          <AiIcon className="w-4 h-4" />
-          {streaming ? "Analysing…" : "Get AI Prediction"}
-        </button>
       </form>
 
       {/* Example prompts */}
@@ -516,10 +556,19 @@ function AiPredict() {
             )}
           </div>
           {!streaming && output && (
-            <div className="px-5 py-3 border-t border-border/30 flex items-center justify-between">
-              <span className="text-[10px] text-muted/60 font-medium">AI-generated — always verify independently</span>
+            <div className="px-5 py-3 border-t border-border/30 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <span className="block text-[10px] text-muted/60 font-medium">
+                  AI estimate, no live bookmaker feed{generatedAt ? ` · ${new Date(generatedAt).toLocaleString("en-GB")}` : ""} — verify independently
+                </span>
+                {sources.length > 0 && (
+                  <span className="mt-1 block text-[10px] text-muted/60 truncate">
+                    Sources: {sources.map((source) => `${source.label} (${source.status})`).join(", ")}
+                  </span>
+                )}
+              </div>
               <button onClick={() => { setOutput(""); setPrompt(""); }}
-                className="text-xs font-bold text-accent hover:underline">New prediction →</button>
+                className="shrink-0 text-xs font-bold text-accent hover:underline">New prediction →</button>
             </div>
           )}
         </div>

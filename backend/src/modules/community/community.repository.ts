@@ -3,7 +3,7 @@ export function createCommunityRepository(db) {
     u.id AS user_id, u.username, u.email, u.role, u.avatar_url, u.is_verified, u.created_at AS user_created_at
   `;
 
-  async function listPredictions({ sport, status, creatorId, creatorRole, limit = 50 }: any = {}) {
+  async function listPredictions({ sport, status, market, league, date, creatorId, creatorRole, limit = 50 }: any = {}) {
     const values = [];
     const where = [];
 
@@ -14,6 +14,22 @@ export function createCommunityRepository(db) {
     if (status && status !== 'all') {
       values.push(status);
       where.push(`p.status = $${values.length}`);
+    }
+    if (market && market !== 'All') {
+      values.push(`%${market}%`);
+      where.push(`((p.prediction->>'type') ILIKE $${values.length} OR p.tags::text ILIKE $${values.length})`);
+    }
+    if (league) {
+      values.push(`%${league}%`);
+      where.push(`(
+        (p.league->>'name') ILIKE $${values.length}
+        OR (p.match_data->'homeTeam'->>'name') ILIKE $${values.length}
+        OR (p.match_data->'awayTeam'->>'name') ILIKE $${values.length}
+      )`);
+    }
+    if (date) {
+      values.push(date);
+      where.push(`LEFT(p.match_data->>'date', 10) = $${values.length}`);
     }
     if (creatorId) {
       values.push(Number(creatorId));
@@ -350,7 +366,7 @@ export function createCommunityRepository(db) {
         totalClicks,
         totalConversions,
         estimatedEarnings: totalConversions * 100,
-        currency: '₦',
+        currency: '$',
         followersGained: 0,
         winRate: decided.length ? Math.round((wins / decided.length) * 1000) / 10 : 0,
         activeCodes: topCodes.length,

@@ -19,9 +19,29 @@ const FEEDS = [
 
 const FEED_TTL = 900; // 15 min
 
+const ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+  '&nbsp;': ' ',
+};
+
+export function sanitizeText(value = ''): string {
+  return value
+    .replace(/^<!\[CDATA\[/, '')
+    .replace(/\]\]>$/, '')
+    .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, entity => ENTITY_MAP[entity] ?? entity)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function getText(block: string, tag: string): string {
   const m = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'));
-  return m ? m[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim() : '';
+  return m ? sanitizeText(m[1]) : '';
 }
 
 function parseRSS(xml: string, sourceName: string): NewsItem[] {
