@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   description   TEXT,
   price_monthly NUMERIC(10,2) NOT NULL DEFAULT 0,
   price_yearly  NUMERIC(10,2) NOT NULL DEFAULT 0,
-  currency      VARCHAR(10)   NOT NULL DEFAULT 'NGN',
+  currency      VARCHAR(10)   NOT NULL DEFAULT 'USD',
   features      JSONB         NOT NULL DEFAULT '[]',
   limits        JSONB         NOT NULL DEFAULT '{}',
   is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
@@ -25,21 +25,21 @@ INSERT INTO subscription_plans
 VALUES
   (
     'free', 'Free', 'Get started with basic features',
-    0, 0, 'NGN',
+    0, 0, 'USD',
     '["View all public tips","Basic forum access","5 code copies per day","Match scores & stats"]',
     '{"code_copies_per_day": 5}',
     true, false, 0
   ),
   (
     'pro', 'Pro', 'Everything you need to win more',
-    4999, 49999, 'NGN',
+    9.99, 99.99, 'USD',
     '["Unlimited code copies","AI match predictions","Full forum access","Follow creators","Priority support","Advanced stats"]',
     '{"code_copies_per_day": 9999}',
     true, true, 1
   ),
   (
     'enterprise', 'Enterprise', 'For serious bettors and syndicates',
-    14999, 149999, 'NGN',
+    29.99, 299.99, 'USD',
     '["All Pro features","Dedicated account manager","Custom odds alerts","API access","White-label tips","Bulk analytics"]',
     '{"code_copies_per_day": 9999}',
     true, false, 2
