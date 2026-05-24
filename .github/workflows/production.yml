@@ -361,7 +361,14 @@ jobs:
             for service in $DEPLOY_SERVICES; do
               container_id="$(docker compose -f docker-compose.prod.yml ps -q "$service")"
               [ -n "$container_id" ] || continue
-              status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+              status=""
+              for attempt in $(seq 1 30); do
+                status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+                if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                  break
+                fi
+                sleep 2
+              done
               if [ "$status" != "healthy" ] && [ "$status" != "running" ]; then
                 docker compose -f docker-compose.prod.yml logs --tail=80 "$service"
                 exit 1
