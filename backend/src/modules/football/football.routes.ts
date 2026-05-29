@@ -31,14 +31,14 @@ async function footballRoutes(fastify) {
   fastify.get('/api/matches/live', {}, ctrl.getLiveMatches);
   fastify.get('/api/matches', { schema: { querystring: matchesQuerySchema } }, ctrl.getMatches);
   fastify.get('/api/matches/:id', { schema: { params: matchParamSchema } }, ctrl.getMatchById);
-  fastify.get('/api/matches/:id/stats', { onRequest: [requireAdvancedStats], schema: { params: matchParamSchema } }, ctrl.getMatchStats);
-  fastify.get('/api/matches/:id/lineups', { onRequest: [requireAdvancedStats], schema: { params: matchParamSchema } }, ctrl.getMatchLineups);
+  fastify.get('/api/matches/:id/stats', { schema: { params: matchParamSchema } }, ctrl.getMatchStats);
+  fastify.get('/api/matches/:id/lineups', { schema: { params: matchParamSchema } }, ctrl.getMatchLineups);
   fastify.get('/api/matches/:id/events', { schema: { params: matchParamSchema } }, ctrl.getMatchEvents);
   fastify.get('/api/matches/:id/players', { schema: { params: matchParamSchema } }, ctrl.getMatchPlayerStats);
 
   // Match analytics
-  fastify.get('/api/matches/:id/predictions', { onRequest: [requireAdvancedStats], schema: { params: matchParamSchema } }, ctrl.getMatchPredictions);
-  fastify.get('/api/matches/:id/injuries', { onRequest: [requireAdvancedStats], schema: { params: matchParamSchema } }, ctrl.getMatchInjuries);
+  fastify.get('/api/matches/:id/predictions', { schema: { params: matchParamSchema } }, ctrl.getMatchPredictions);
+  fastify.get('/api/matches/:id/injuries', { schema: { params: matchParamSchema } }, ctrl.getMatchInjuries);
 
   // Leagues & standings
   fastify.get('/api/leagues', { schema: { querystring: leaguesQuerySchema } }, ctrl.getLeagues);

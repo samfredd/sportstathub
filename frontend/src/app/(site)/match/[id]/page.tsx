@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fixtureToMatch, computeH2HStats, parseMatchStats } from "@/lib/transforms";
+import { fixtureToMatch, computeH2HStats } from "@/lib/transforms";
 import { MatchAnalyticsTabs, ActiveStatBadge } from "./_tabs";
 import type { FormMatch } from "./_tabs";
 import LeftLeagueSidebar from "@/components/LeftLeagueSidebar";
@@ -197,13 +197,9 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const isFinished  = FINISHED.has(match.statusShort);
   const season: string | undefined = matchJson.data?.league?.season?.toString();
 
-  const [h2hJson, eventsJson, statsJson, lineupsJson, predictionsJson, injuriesJson, homeFixJson, awayFixJson, standingsJson] = await Promise.all([
-    Promise.resolve(null),
+  const [h2hJson, eventsJson, homeFixJson, awayFixJson, standingsJson] = await Promise.all([
+    fetchJson(`${BASE}/api/h2h?team1=${match.homeId}&team2=${match.awayId}&last=10`, 3600),
     hasStarted ? fetchJson(`${BASE}/api/matches/${id}/events`, 60)  : Promise.resolve(null),
-    Promise.resolve(null),
-    Promise.resolve(null),
-    Promise.resolve(null),
-    Promise.resolve(null),
     fetchJson(`${BASE}/api/teams/${match.homeId}/fixtures?last=20`, 300),
     fetchJson(`${BASE}/api/teams/${match.awayId}/fixtures?last=20`, 300),
     season ? fetchJson(`${BASE}/api/leagues/${match.leagueId}/standings?season=${season}`, 3600) : Promise.resolve(null),
@@ -213,16 +209,16 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const h2hStats    = computeH2HStats(h2hFixtures, match.homeId);
   const trend       = h2hTrend(h2hFixtures);
   const events      = eventsJson?.data ?? [];
-  const statsData   = statsJson?.data ?? null;
-  const matchStats  = parseMatchStats(statsData);
-  const lineups     = lineupsJson?.data ?? [];
-  const homeLineup  = lineups.find((item: any) => item.team?.id === match.homeId) ?? lineups[0];
-  const awayLineup  = lineups.find((item: any) => item.team?.id === match.awayId) ?? lineups[1];
+  const statsData   = null;
+  const matchStats  = null;
+  const lineups: any[] = [];
+  const homeLineup  = undefined;
+  const awayLineup  = undefined;
   const momentum    = buildMomentum(events, match);
-  const signals     = buildSignals({ match, statsData, h2hStats, trend });
-  const model       = outcomeModel({ match, statsData, h2hStats });
-  const predictions = predictionsJson?.data ?? null;
-  const injuries    = injuriesJson?.data ?? [];
+  const signals     = buildSignals({ match, statsData: null, h2hStats, trend });
+  const model       = outcomeModel({ match, statsData: null, h2hStats });
+  const predictions = null;
+  const injuries: any[] = [];
   const homeForm    = computeTeamForm(homeFixJson?.data ?? [], match.homeId);
   const awayForm    = computeTeamForm(awayFixJson?.data ?? [], match.awayId);
 

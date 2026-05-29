@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { MatchShape, ParsedMatchStats, H2HStats } from "@/lib/transforms";
+import { parseMatchStats } from "@/lib/transforms";
 import { withAuth } from "@/lib/authHeaders";
 import PremiumGate, { ProBadge } from "@/components/PremiumGate";
 
@@ -310,6 +311,41 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
   const [homeVenue, setHomeVenue] = useState<VenueFilter>("all");
   const [awayVenue, setAwayVenue] = useState<VenueFilter>("all");
 
+  // Fetch match analytics data client-side (routes are public)
+  const [clientStatsData,   setClientStatsData]   = useState<any>(null);
+  const [clientLineups,     setClientLineups]     = useState<any[]>([]);
+  const [clientPredictions, setClientPredictions] = useState<any>(null);
+  const [clientInjuries,    setClientInjuries]    = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${BASE}/api/matches/${props.matchId}/stats`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${BASE}/api/matches/${props.matchId}/lineups`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${BASE}/api/matches/${props.matchId}/predictions`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${BASE}/api/matches/${props.matchId}/injuries`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([stats, lineups, preds, injuries]) => {
+      if (stats?.data?.length)    setClientStatsData(stats.data);
+      if (lineups?.data?.length)  setClientLineups(lineups.data);
+      if (preds?.data)            setClientPredictions(preds.data);
+      if (injuries?.data?.length) setClientInjuries(injuries.data);
+    });
+  }, [props.matchId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const matchStats = useMemo(() => parseMatchStats(clientStatsData), [clientStatsData]);
+  const homeLineup = clientLineups.find((item: any) => item.team?.id === props.match.homeId) ?? clientLineups[0];
+  const awayLineup = clientLineups.find((item: any) => item.team?.id === props.match.awayId) ?? clientLineups[1];
+
+  const enrichedProps: MatchTabsProps = {
+    ...props,
+    matchStats,
+    statsData: clientStatsData,
+    lineups: clientLineups,
+    homeLineup,
+    awayLineup,
+    predictions: clientPredictions,
+    injuries: clientInjuries,
+  };
+
   // Broadcast the active stat to sibling components (e.g. venue strip indicator)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("stat-type-change", { detail: statType }));
@@ -342,18 +378,13 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`shrink-0 px-4 py-2 rounded-xl text-[13px] font-bold transition-all flex items-center gap-2 ${
+              className={`shrink-0 px-4 py-2 rounded-xl text-[13px] font-bold transition-all ${
                 tab === t.id
                   ? "bg-accent text-white shadow-sm"
                   : "text-muted hover:text-foreground bg-surface border border-border/60 hover:bg-surface-hover"
               }`}
             >
               {t.label}
-              {t.id === "analyse" && (
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-accent-gold/15 border border-accent-gold/30 text-accent-gold">
-                  PRO
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -382,7 +413,7 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
       {/* ── Tab content ─────────────────────────────────────────── */}
       {tab === "form"      && (
         <LastMatchesTab
-          {...props}
+          {...enrichedProps}
           statType={statType}
           lastN={lastN}
           homeVenue={homeVenue}
@@ -391,13 +422,9 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
           setAwayVenue={setAwayVenue}
         />
       )}
-      {tab === "h2h"       && <H2HTab {...props} lastN={lastN} statType={statType} />}
-      {tab === "standings" && <StandingsTab {...props} />}
-      {tab === "analyse" && (
-        <PremiumGate feature="Smart Analysis" mode="replace" flagKey="live_ai">
-          <SmartAnalyseTab {...props} />
-        </PremiumGate>
-      )}
+      {tab === "h2h"       && <H2HTab {...enrichedProps} lastN={lastN} statType={statType} />}
+      {tab === "standings" && <StandingsTab {...enrichedProps} />}
+      {tab === "analyse"   && <SmartAnalyseTab {...enrichedProps} />}
     </div>
   );
 }
@@ -992,7 +1019,7 @@ const ANALYSE_TABS = [
 type AnalyseTabId = (typeof ANALYSE_TABS)[number]["id"];
 
 function SmartAnalyseTab(props: MatchTabsProps) {
-  const [analyseTab, setAnalyseTab] = useState<AnalyseTabId>("ai");
+  const [analyseTab, setAnalyseTab] = useState<AnalyseTabId>("stats");
   const { match, matchStats, statsData, events, momentum, lineups, homeLineup, awayLineup, signals, model, trend, predictions, injuries, hasStarted, isFinished } = props;
 
   return (
@@ -1016,7 +1043,9 @@ function SmartAnalyseTab(props: MatchTabsProps) {
 
       {/* AI */}
       {analyseTab === "ai" && (
-        <AiPredictionCard matchId={props.matchId} homeTeam={match.homeTeam} awayTeam={match.awayTeam} isUpcoming={!hasStarted} />
+        <PremiumGate feature="AI Analysis" mode="replace" flagKey="live_ai">
+          <AiPredictionCard matchId={props.matchId} homeTeam={match.homeTeam} awayTeam={match.awayTeam} isUpcoming={!hasStarted} />
+        </PremiumGate>
       )}
 
       {/* Stats */}
