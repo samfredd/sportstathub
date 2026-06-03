@@ -17,11 +17,6 @@ on:
         required: false
         default: false
         type: boolean
-      deploy_ref:
-        description: "Git ref for deploy/deploy.sh to pull on the server."
-        required: false
-        default: main
-        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -313,11 +308,13 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           APP_DIR: ${{ secrets.PRODUCTION_APP_DIR || '/var/www/project' }}
-          DEPLOY_REF: ${{ inputs.deploy_ref || 'main' }}
-          DEPLOY_MODE: pull
+          REPO: ${{ github.repository }}
           IMAGE_REGISTRY: ${{ env.REGISTRY }}
           IMAGE_NAMESPACE: ${{ needs.publish.outputs.image_namespace }}
-          IMAGE_TAG: latest
+          # Pin to the exact commit's images (publish builds both :sha and :latest).
+          # Deploying :latest makes "which version is live" ambiguous and is what
+          # caused the version drift on the box.
+          IMAGE_TAG: ${{ github.sha }}
           DEPLOY_DOMAIN: ${{ needs.publish.outputs.production_domain }}
           DEPLOY_ACME_EMAIL: ${{ secrets.ACME_EMAIL || vars.ACME_EMAIL }}
           GHCR_USER: ${{ github.actor }}
@@ -326,17 +323,30 @@ jobs:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
           password: ${{ secrets.PRODUCTION_PASSWORD }}
-          envs: APP_DIR,DEPLOY_REF,DEPLOY_MODE,IMAGE_REGISTRY,IMAGE_NAMESPACE,IMAGE_TAG,DEPLOY_DOMAIN,DEPLOY_ACME_EMAIL,GHCR_USER,GHCR_TOKEN
+          envs: APP_DIR,REPO,IMAGE_REGISTRY,IMAGE_NAMESPACE,IMAGE_TAG,DEPLOY_DOMAIN,DEPLOY_ACME_EMAIL,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
+            mkdir -p "$APP_DIR"
             cd "$APP_DIR"
+
+            # Fetch the EXACT compose file for this commit straight from GitHub.
+            # The server holds NO git checkout and NO source — only this compose
+            # plus the secrets in .env. That kills the drift that caused the mess.
+            curl -fsSL \
+              -H "Authorization: Bearer $GHCR_TOKEN" \
+              -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/$REPO/contents/docker-compose.prod.yml?ref=$IMAGE_TAG" \
+              -o docker-compose.prod.yml
+
             echo "$GHCR_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GHCR_USER" --password-stdin
 
-            if [ -f .env ]; then
-              set -a
-              . ./.env
-              set +a
+            # Secrets live ONLY on the server, never shipped through CI. Fail fast
+            # with a clear message rather than a cryptic boot crash if it's absent.
+            if [ ! -f .env ]; then
+              echo "ERROR: $APP_DIR/.env is missing — create it on the server before deploying." >&2
+              exit 1
             fi
+            set -a; . ./.env; set +a
 
             export IMAGE_REGISTRY IMAGE_NAMESPACE IMAGE_TAG
             export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
