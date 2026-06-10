@@ -67,8 +67,8 @@ DEPLOY_MODE=pull bash deploy/deploy.sh
 The workflow in `.github/workflows/production.yml` runs both app pipelines:
 
 - Pull requests: backend CI, frontend CI, and Docker build validation.
-- Pushes to `main`: all CI checks, Docker build validation, and GHCR image publishing.
-- Manual runs: optional production deploy over SSH after images are published.
+- Pushes to `main`: all CI checks, Docker build validation, GHCR image publishing, and production deploy over SSH.
+- Manual runs: optional production deploy over SSH when `deploy=true` after images are published.
 
 Published images:
 
@@ -91,10 +91,10 @@ Repository secrets for SSH deployment:
 
 - `PRODUCTION_HOST`
 - `PRODUCTION_USER`
-- `PRODUCTION_SSH_KEY`
+- `PRODUCTION_SSH_KEY` or `PRODUCTION_PASSWORD`
 - `PRODUCTION_APP_DIR` (optional, defaults to `/var/www/project`)
 
-Manual deployment from Actions uses the workflow dispatch input `deploy=true`. The SSH job logs into GHCR on the server, exports the image variables used by `docker-compose.prod.yml`, and runs `DEPLOY_MODE=pull bash deploy/deploy.sh`.
+Automatic deployment runs after every successful push to `main`. Manual deployment from Actions still uses the workflow dispatch input `deploy=true`. The SSH job logs into GHCR on the server, exports the image variables used by `docker-compose.prod.yml`, and starts the published images for the exact commit.
 
 OddSwitch runs on the Docker network at `http://oddswitch-api:8000`; the backend uses that URL in production. The deploy script also initializes submodules so the server can build OddSwitch locally when `DEPLOY_MODE=build`.
 
