@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isAuthed } from "@/lib/session";
 
 interface NavIconProps { active: boolean }
 
@@ -31,7 +32,7 @@ export default function MobileBottomBar() {
 
   /* Read auth state on mount + react to login/logout */
   useEffect(() => {
-    const check = () => setAuthed(!!localStorage.getItem("token"));
+    const check = () => setAuthed(isAuthed());
     check();
     window.addEventListener("storage", check);
     return () => window.removeEventListener("storage", check);

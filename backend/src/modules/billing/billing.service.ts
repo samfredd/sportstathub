@@ -63,10 +63,11 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
     const plan = await repo.findActivePlanBySlug(planSlug);
     if (!plan) throw Object.assign(new Error('Plan not found'), { statusCode: 404 });
 
-    const currency = String(plan.currency || '').toUpperCase();
+    const currency = String(plan.currency || 'NGN').toUpperCase();
     const amount = planAmount(plan, interval);
-    if (currency !== 'USD') {
-      throw Object.assign(new Error('Only USD subscription plans are supported for Paystack checkout'), { statusCode: 400 });
+    const SUPPORTED = new Set(['NGN', 'USD', 'GHS', 'ZAR', 'KES']);
+    if (!SUPPORTED.has(currency)) {
+      throw Object.assign(new Error(`Currency ${currency} is not supported by Paystack`), { statusCode: 400 });
     }
     if (amount <= 0) {
       throw Object.assign(new Error('Plan amount must be greater than zero'), { statusCode: 400 });

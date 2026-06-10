@@ -3,10 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { communityApi } from "@/lib/communityApi";
-
-function decodeJwt(token: string) {
-  try { return JSON.parse(atob(token.split(".")[1])) as any; } catch { return null; }
-}
+import { getSessionUser } from "@/lib/session";
 
 const BENEFITS = [
   { icon: "💰", title: "Earn commissions",    desc: "Get paid for every user who places a bet through your booking codes." },
@@ -38,9 +35,8 @@ export default function CreatorPage() {
   const [loading, setLoading]     = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { setLoading(false); return; }
-    const u = decodeJwt(token);
+    const u = getSessionUser();
+    if (!u) { setLoading(false); return; }
     setRole(u?.role ?? "user");
     if (u?.role === "creator") {
       communityApi.getCreatorDashboard().then(setDashboard).catch(() => {}).finally(() => setLoading(false));

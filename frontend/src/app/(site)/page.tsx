@@ -24,6 +24,7 @@ import LeftLeagueSidebar from "@/components/LeftLeagueSidebar";
 import RightStatsSidebar from "@/components/RightStatsSidebar";
 import SportIcon from "@/components/SportIcon";
 import PremiumGate, { ProBadge } from "@/components/PremiumGate";
+import { isSportComingSoon } from "@/lib/sports";
 
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -72,7 +73,7 @@ export default function Home() {
   const [activeDate, setActiveDate]         = useState(todayISO);
   const [activeTab, setActiveTab]           = useState("upcoming");
   const [activeSport, setActiveSport]       = useState("football");
-  const [sports, setSports]                 = useState([{ id: "football", label: "Football" }]);
+  const [sports, setSports]                 = useState<{ id: string; label: string; comingSoon?: boolean }[]>([{ id: "football", label: "Football" }]);
   const [matches, setMatches]               = useState([]);
   const [loading, setLoading]               = useState(true);
   const [sidebarLeagues, setSidebarLeagues] = useState<any[]>([]);
@@ -94,10 +95,12 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  // Fetch leagues for all sports concurrently
+  // Fetch leagues only for active sports (football). "Coming soon" sports fire
+  // no API calls, so the limited daily API-Football quota stays on football.
   useEffect(() => {
-    if (!sports.length) return;
-    Promise.all(sports.map(sport => {
+    const activeSports = sports.filter(sport => !sport.comingSoon);
+    if (!activeSports.length) return;
+    Promise.all(activeSports.map(sport => {
       const leagueParams = new URLSearchParams({ sport: sport.id, popular: "true" });
       return fetch(`${BASE}/api/leagues?${leagueParams.toString()}`)
         .then(r => r.ok ? r.json() : null)
@@ -125,6 +128,12 @@ export default function Home() {
   }, []);
 
   const fetchMatches = useCallback(() => {
+    // Coming-soon sports have no data pipeline — skip the API call entirely.
+    if (isSportComingSoon(activeSport)) {
+      setMatches([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const url = activeTab === "live"
       ? `${BASE}/api/matches/live?sport=${activeSport}`
@@ -139,6 +148,13 @@ export default function Home() {
   useEffect(() => {
     queueMicrotask(fetchMatches);
   }, [fetchMatches]);
+
+  // Auto-refresh live matches every 30 s so "live feed" actually stays live
+  useEffect(() => {
+    if (activeTab !== "live") return;
+    const id = setInterval(fetchMatches, 30_000);
+    return () => clearInterval(id);
+  }, [activeTab, fetchMatches]);
 
   // Close sport dropdown on outside click
   useEffect(() => {
@@ -199,6 +215,7 @@ export default function Home() {
   const platformStatRows = buildPlatformStats(platformStats);
 
   function handleSportChange(sport) {
+    if (isSportComingSoon(sport)) return; // parked sport — ignore selection
     setActiveSport(sport);
     setSelectedLeague(null);
   }

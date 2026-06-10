@@ -49,3 +49,7 @@ Thumbs.db
 # Tool caches and generated analysis
 .vercel/
 graphify-out/cache/
+
+# graphify submodule + output (untracked, kept locally)
+graphify/
+graphify-out/

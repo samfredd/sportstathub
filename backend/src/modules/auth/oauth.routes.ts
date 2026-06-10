@@ -1,6 +1,5 @@
 import fp         from 'fastify-plugin';
 import oauthPlugin from '@fastify/oauth2';
-import cookie      from '@fastify/cookie';
 
 import config              from '../../config/env.config.js';
 import * as helpers        from '../../helpers/auth.helpers.js';
@@ -21,10 +20,8 @@ import { createOAuthController }  from './oauth.controller.js';
  */
 async function oauthRoutes(fastify: any) {
 
-  // Cookie support is required by @fastify/oauth2 for PKCE code-verifier storage.
-  // Registered here (not in server.js) to keep the OAuth dependency self-contained.
-  // fp() propagates the decorator up so other plugins can also use cookies.
-  await fastify.register(cookie);
+  // Cookie support (required by @fastify/oauth2 for PKCE code-verifier storage)
+  // is registered globally in server.ts before this plugin loads.
 
   // Register the Google OAuth2 plugin.
   // startRedirectPath adds a GET /auth/google route automatically — no handler needed.

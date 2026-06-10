@@ -52,7 +52,7 @@ export function createFootballController(footballService) {
 
   async function getMatchPlayerStats(request, reply) {
     const { sport } = request.query || {};
-    const data = await footballService.getMatchPlayerStats(request.params.id, sport || 'basketball');
+    const data = await footballService.getMatchPlayerStats(request.params.id, sport);
     return reply.send({ status: 'success', data });
   }
 

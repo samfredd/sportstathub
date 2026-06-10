@@ -20,6 +20,7 @@ async function get(path: string, params: Params = {}, fetchOpts: FetchOptions = 
   const res = await fetch(url.toString(), {
     next: nextOpt,
     ...(cache ? { cache } : {}),
+    credentials: "include", // send the httpOnly auth cookie
     ...rest,
     headers: {
       ...getAuthHeaders(),

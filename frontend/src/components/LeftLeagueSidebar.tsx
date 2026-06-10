@@ -48,10 +48,11 @@ export default function LeftLeagueSidebar({
       .catch(() => {});
   }, []);
 
-  // Load leagues for all sports
+  // Load leagues only for active sports — "coming soon" sports fire no calls.
   useEffect(() => {
-    if (!sports.length) return;
-    Promise.all(sports.map(sport =>
+    const activeSports = sports.filter(sport => !(sport as any).comingSoon);
+    if (!activeSports.length) return;
+    Promise.all(activeSports.map(sport =>
       fetch(`${BASE}/api/leagues?sport=${sport.id}&popular=true`)
         .then(r => r.ok ? r.json() : null)
         .then(json => (json?.data ?? []).map((l: any) => ({
@@ -78,6 +79,8 @@ export default function LeftLeagueSidebar({
   }, []);
 
   function handleSportSelect(sportId: string) {
+    const target = sports.find(s => s.id === sportId);
+    if (target && (target as any).comingSoon) return; // parked sport
     if (onSportChange) onSportChange(sportId);
     else setInternalActiveSport(sportId);
     setShowSportDrop(false);
@@ -125,21 +128,35 @@ export default function LeftLeagueSidebar({
 
         {showSportDrop && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl overflow-hidden shadow-lg z-50">
-            {sports.map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => handleSportSelect(id)}
-                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-[11px] font-bold transition-colors cursor-pointer border-b border-border/40 last:border-0 ${
-                  activeSport === id
-                    ? "bg-accent/8 text-accent"
-                    : "text-foreground hover:bg-surface-hover"
-                }`}
-              >
-                <SportIcon sport={id} className={`w-3.5 h-3.5 ${activeSport === id ? "text-accent" : "text-muted"}`} />
-                {label}
-                {activeSport === id && <CheckIcon className="w-3 h-3 text-accent ml-auto" />}
-              </button>
-            ))}
+            {sports.map((sport) => {
+              const { id, label } = sport;
+              const comingSoon = (sport as any).comingSoon;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleSportSelect(id)}
+                  disabled={comingSoon}
+                  title={comingSoon ? "Coming soon" : undefined}
+                  className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-[11px] font-bold transition-colors border-b border-border/40 last:border-0 ${
+                    comingSoon
+                      ? "text-muted/40 cursor-not-allowed"
+                      : activeSport === id
+                      ? "bg-accent/8 text-accent cursor-pointer"
+                      : "text-foreground hover:bg-surface-hover cursor-pointer"
+                  }`}
+                >
+                  <SportIcon sport={id} className={`w-3.5 h-3.5 ${!comingSoon && activeSport === id ? "text-accent" : "text-muted"}`} />
+                  {label}
+                  {comingSoon ? (
+                    <span className="ml-auto px-1.5 py-0.5 rounded bg-muted/15 text-muted/60 text-[8px] font-black tracking-wider uppercase">
+                      Soon
+                    </span>
+                  ) : activeSport === id ? (
+                    <CheckIcon className="w-3 h-3 text-accent ml-auto" />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

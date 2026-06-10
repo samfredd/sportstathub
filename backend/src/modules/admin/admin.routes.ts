@@ -144,12 +144,20 @@ async function adminRoutes(fastify) {
           isPremium:   { type: 'boolean', default: false },
           isTrending:  { type: 'boolean', default: false },
           tags:        { type: 'array', items: { type: 'string' }, default: [] },
+          fixtureId:   { type: 'integer', nullable: true },
         },
         additionalProperties: false,
       },
     },
   }, ctrl.createAdminPrediction);
   fastify.delete('/api/admin/predictions/:id', { ...guard, schema: { params: idParam } }, ctrl.deletePrediction);
+
+  // Manually trigger the settlement sweep (grades open predictions tied to a
+  // finished fixture). The scheduler also runs this hourly.
+  fastify.post('/api/admin/predictions/settle', guard, async (_request, reply) => {
+    const result = await (fastify as any).runSettlement();
+    return reply.status(200).send({ status: 'success', data: result });
+  });
 
   // ─── Forum ────────────────────────────────────────────────
   const threadsQuery = { type: 'object', properties: { page: { type: 'integer', default: 1 }, limit: { type: 'integer', default: 20 }, search: { type: 'string', default: '' } } };

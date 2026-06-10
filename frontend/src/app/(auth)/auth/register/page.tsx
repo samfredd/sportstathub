@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { setSessionUser } from "@/lib/session";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -60,14 +61,15 @@ export default function RegisterPage() {
     try {
       const res = await fetch(`${BASE}/auth/register`, {
         method: "POST",
+        credentials: "include", // let the browser store the httpOnly auth cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(friendlyError(data.error || data.message || "Registration failed"));
-      // OTP disabled: backend returns a token directly → log in immediately
-      if (data.data?.token) {
-        localStorage.setItem("token", data.data.token);
+      // OTP disabled: backend sets the auth cookie and returns the user → log in.
+      if (data.data?.token || data.data?.user) {
+        setSessionUser(data.data?.user ?? null);
         router.push("/");
       } else {
         router.push(`/auth/verify-otp?email=${encodeURIComponent(form.email)}`);

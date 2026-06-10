@@ -36,6 +36,7 @@ export const createPredictionSchema = {
     tags:        { type: 'array', items: { type: 'string', maxLength: 40 }, default: [] },
     isTrending:  { type: 'boolean', default: false },
     isPremium:   { type: 'boolean', default: false },
+    fixtureId:   { type: 'integer', nullable: true },
   },
   additionalProperties: false,
 };

@@ -4,12 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserSidebar from "@/components/user/UserSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
-
-function decodeJwt(token: string) {
-  try {
-    return JSON.parse(atob(token.split(".")[1])) as { id?: number; email?: string; username?: string; role?: string; exp?: number; iat?: number };
-  } catch { return null; }
-}
+import { getSessionUser, logout as sessionLogout } from "@/lib/session";
+import { communityApi } from "@/lib/communityApi";
 
 export default function UserDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -18,23 +14,19 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { router.replace("/auth/login"); return; }
-    const u = decodeJwt(token);
-    if (!u) { localStorage.removeItem("token"); router.replace("/auth/login"); return; }
-    if (u.exp && u.exp * 1000 < Date.now()) {
-      localStorage.removeItem("token");
-      router.replace("/auth/login?session=expired");
-      return;
-    }
-    setUser(u);
+    const stored = getSessionUser();
+    if (!stored) { router.replace("/auth/login"); return; }
+    // Render immediately from the stored descriptor, then confirm the cookie is
+    // still valid against the server (expired/invalid cookie → back to login).
+    setUser(stored);
     setLoading(false);
+    communityApi.getMe()
+      .then((me: any) => setUser(me))
+      .catch(() => { sessionLogout().finally(() => router.replace("/auth/login?session=expired")); });
   }, [router]);
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    window.dispatchEvent(new Event("storage"));
-    router.push("/");
+    void sessionLogout().finally(() => router.push("/"));
   }
 
   if (loading) {

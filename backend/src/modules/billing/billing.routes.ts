@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import crypto from 'node:crypto';
 import config from '../../config/env.config.js';
 import { createPaystackClient } from './paystack.client.js';
 import { createBillingRepository } from './billing.repository.js';
@@ -45,6 +46,55 @@ async function billingRoutes(fastify) {
     onRequest: [fastify.authenticate],
     schema: { body: verifySchema },
   }, ctrl.verifyPaystack);
+
+  // ── Paystack webhook ────────────────────────────────────────────────────────
+  // Paystack POSTs signed events here. We acknowledge immediately (Paystack
+  // retries for up to 72 h if we return non-2xx) then process asynchronously.
+  // This handles the case where the user closes the browser before being
+  // redirected back to /dashboard/subscription after payment.
+  fastify.post('/api/billing/paystack/webhook', {
+    config: { rawBody: true, rateLimit: false },
+  }, async (request: any, reply: any) => {
+    // Validate HMAC-SHA512 against the exact raw bytes Paystack signed.
+    // Using request.rawBody (Buffer) guarantees byte-perfect comparison;
+    // JSON.stringify(parsedBody) can differ from the original bytes.
+    const sig = (request.headers['x-paystack-signature'] as string) ?? '';
+    if (config.paystackSecretKey) {
+      if (!sig) {
+        return reply.status(400).send({ error: 'Missing webhook signature' });
+      }
+      const expected = crypto
+        .createHmac('sha512', config.paystackSecretKey)
+        .update(request.rawBody as Buffer)
+        .digest('hex');
+      if (expected !== sig) {
+        return reply.status(400).send({ error: 'Invalid webhook signature' });
+      }
+    }
+
+    // Acknowledge receipt before doing any async work
+    reply.status(200).send({ status: 'ok' });
+
+    const event = request.body as any;
+    if (event?.event !== 'charge.success') return;
+
+    const reference = event?.data?.reference as string | undefined;
+    if (!reference) return;
+
+    // Process in the background — do not block the acknowledged response
+    Promise.resolve().then(async () => {
+      try {
+        const payment = await repo.findPaymentByReference(reference);
+        // Already processed or not ours — skip
+        if (!payment || payment.status === 'success') return;
+
+        await service.verifyPayment({ id: payment.user_id }, reference);
+        fastify.log.info({ reference }, 'Paystack webhook: subscription activated');
+      } catch (err) {
+        fastify.log.error({ err, reference }, 'Paystack webhook: failed to activate subscription');
+      }
+    });
+  });
 }
 
 export default fp(billingRoutes, {

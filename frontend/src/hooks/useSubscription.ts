@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { communityApi } from "@/lib/communityApi";
+import { getSessionUser } from "@/lib/session";
 
 export type Plan = string | null;
 
@@ -20,24 +21,6 @@ export interface SubscriptionState {
   isAdmin: boolean;
 }
 
-function decodeJwt(token: string): { role?: string; exp?: number } | null {
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(normalized)) as { role?: string; exp?: number };
-  } catch {
-    return null;
-  }
-}
-
-function isValidAdminToken(token: string | null): boolean {
-  if (!token) return false;
-  const payload = decodeJwt(token);
-  if (payload?.role !== "admin") return false;
-  if (payload.exp && payload.exp * 1000 < Date.now()) return false;
-  return true;
-}
-
 export function useSubscription(): SubscriptionState {
   const [state, setState] = useState<SubscriptionState>({
     plan: null,
@@ -51,27 +34,11 @@ export function useSubscription(): SubscriptionState {
   });
 
   useEffect(() => {
-    const token = typeof window !== "undefined"
-      ? window.localStorage.getItem("token")
-      : null;
-
-    if (!token) {
-      setState(s => ({ ...s, loading: false, isLoggedIn: false }));
-      return;
-    }
-
-    const tokenIsAdmin = isValidAdminToken(token);
-    if (tokenIsAdmin) {
-      setState({
-        plan: "admin",
-        status: "active",
-        expiresAt: null,
-        loading: false,
-        isPro: true,
-        isFree: false,
-        isLoggedIn: true,
-        isAdmin: true,
-      });
+    // Optimistic hint from the non-sensitive descriptor, then confirm with the
+    // server (auth travels in the httpOnly cookie, so /api/me is the source of truth).
+    const hint = getSessionUser();
+    if (hint?.role === "admin") {
+      setState(s => ({ ...s, isLoggedIn: true, isAdmin: true, isPro: true, isFree: false }));
     }
 
     communityApi.getMe()
@@ -95,8 +62,8 @@ export function useSubscription(): SubscriptionState {
         });
       })
       .catch(() => {
-        if (tokenIsAdmin) return;
-        setState(s => ({ ...s, loading: false, isLoggedIn: !!token }));
+        // 401 → not authenticated (cookie missing/expired).
+        setState(s => ({ ...s, loading: false, isLoggedIn: false }));
       });
   }, []);
 

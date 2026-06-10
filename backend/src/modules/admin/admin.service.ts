@@ -247,7 +247,7 @@ export function createAdminService(repo) {
   }
 
   async function createAdminPrediction(adminId, body) {
-    const { sport, league, matchData, prediction, isPremium, tags, isTrending } = body;
+    const { sport, league, matchData, prediction, isPremium, tags, isTrending, fixtureId } = body;
     const created = await repo.createAdminPrediction({
       userId: adminId,
       sport,
@@ -257,6 +257,7 @@ export function createAdminService(repo) {
       isPremium: isPremium ?? false,
       tags: tags ?? [],
       isTrending: isTrending ?? false,
+      fixtureId: fixtureId ?? null,
     });
     await repo.createAuditLog({
       adminId,

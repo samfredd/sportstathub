@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { setSessionUser } from "@/lib/session";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -43,13 +44,15 @@ export default function LoginPage() {
     try {
       const res = await fetch(`${BASE}/auth/login`, {
         method: "POST",
+        credentials: "include", // let the browser store the httpOnly auth cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(friendlyError(data.error || data.message || "Login failed"));
-      if (data.data?.token) localStorage.setItem("token", data.data.token);
-      window.dispatchEvent(new Event("storage"));
+      // The JWT is set as an httpOnly cookie by the server; we only keep a
+      // non-sensitive user descriptor for the UI.
+      setSessionUser(data.data?.user ?? null);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);

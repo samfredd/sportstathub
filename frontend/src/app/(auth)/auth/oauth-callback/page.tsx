@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { API_BASE, setSessionUser } from "@/lib/session";
 
 function OAuthCallbackContent() {
   const router = useRouter();
@@ -11,7 +12,6 @@ function OAuthCallbackContent() {
 
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const token = params.get("token") || hashParams.get("token");
     const err = params.get("error") || hashParams.get("error");
 
     if (err) {
@@ -19,18 +19,22 @@ function OAuthCallbackContent() {
       return;
     }
 
-    if (!token) {
-      queueMicrotask(() => setError("Missing OAuth token"));
-      return;
-    }
-
-    try {
-      window.localStorage?.setItem("token", token);
-      window.dispatchEvent(new Event("storage"));
-      router.replace("/dashboard");
-    } catch {
-      queueMicrotask(() => setError("Could not save the login session"));
-    }
+    // The backend already set the httpOnly auth cookie during the OAuth redirect.
+    // Fetch the signed-in user (cookie is sent automatically) to populate the UI.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/me`, { credentials: "include" });
+        if (!res.ok) throw new Error("not authenticated");
+        const json = await res.json();
+        if (cancelled) return;
+        setSessionUser(json.data ?? json);
+        router.replace("/dashboard");
+      } catch {
+        if (!cancelled) setError("Could not complete Google sign-in. Please try again.");
+      }
+    })();
+    return () => { cancelled = true; };
   }, [params, router]);
 
   if (error) {

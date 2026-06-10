@@ -3,10 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { communityApi } from "@/lib/communityApi";
-
-function decodeJwt(token: string) {
-  try { return JSON.parse(atob(token.split(".")[1])) as any; } catch { return null; }
-}
+import { getSessionUser, logout as sessionLogout } from "@/lib/session";
 
 function passwordStrength(pw: string) {
   let score = 0;
@@ -59,8 +56,9 @@ export default function UserSettingsPage() {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) setUser(decodeJwt(token));
+    // Show stored descriptor immediately, then refresh from the server.
+    setUser(getSessionUser());
+    communityApi.getMe().then((me: any) => setUser(me)).catch(() => {});
   }, []);
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -80,9 +78,7 @@ export default function UserSettingsPage() {
   }
 
   function handleSignOut() {
-    localStorage.removeItem("token");
-    window.dispatchEvent(new Event("storage"));
-    router.push("/");
+    void sessionLogout().finally(() => router.push("/"));
   }
 
   const strength   = passwordStrength(newPw);

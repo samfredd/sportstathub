@@ -12,13 +12,22 @@ const DEFAULT_TTL = {
   standings:    3600,
   h2h:          3600,
   scorers:      1800,
-  leagues:      3600,
+  leagues:      21600,   // 6h — league lists barely change; reduce daily-quota burn
   referees:     3600,
   predictions:  300,
   injuries:     300,
   teamStats:    3600,
   playerRanks:  1800,
 };
+
+// How long to keep a "stale" copy that can be served when the upstream API is
+// down or rate-limited. Far longer than the fresh TTL — a slightly old payload
+// beats a 502/429 in the user's face.
+const STALE_TTL = 86400; // 24h
+
+// When the upstream returns 429, remember it briefly so we stop hammering an
+// already-exhausted quota (free tier is 100 req/day).
+const RATE_LIMIT_COOLDOWN = 120; // 2 min
 
 export function normalizeGameScore(value: any): number | null {
   const score = typeof value === 'object' && value !== null ? value.total : value;
@@ -133,14 +142,45 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
         .filter(([, v]) => v !== undefined && v !== null)
         .map(([k, v]) => [k, String(v)] as [string, string])
     ).toString();
-    const cacheKey = `${sport}:${actualEndpoint}:${qs}`;
+    const cacheKey  = `${sport}:${actualEndpoint}:${qs}`;
+    const staleKey  = `${cacheKey}:stale`;
+    const cooldownKey = `${cacheKey}:cooldown`;
 
+    const readJson = async (key: string) => {
+      try {
+        const raw = await redis.get(key);
+        if (raw) return JSON.parse(raw);
+      } catch {
+        // Redis unavailable or corrupted entry — treat as a miss
+      }
+      return undefined;
+    };
+
+    // Fresh cache hit → serve immediately
+    const fresh = await readJson(cacheKey);
+    if (fresh !== undefined) return fresh;
+
+    // Recent 429 → don't re-hit the exhausted quota; serve the last good copy
+    // if we have one, otherwise surface the rate limit.
     try {
-      const cached = await redis.get(cacheKey);
-      if (cached) return JSON.parse(cached);
-    } catch {
-      // Redis miss is non-fatal
+      if (await redis.get(cooldownKey)) {
+        const stale = await readJson(staleKey);
+        if (stale !== undefined) return stale;
+        const err: any = new Error('API rate limit reached. Try again shortly.');
+        err.statusCode = 429;
+        throw err;
+      }
+    } catch (e: any) {
+      if (e?.statusCode) throw e; // re-throw our own 429
+      // Redis read failed — fall through to a live fetch
     }
+
+    // On any upstream failure, fall back to the stale copy when available.
+    const serveStaleOrThrow = async (err: any) => {
+      const stale = await readJson(staleKey);
+      if (stale !== undefined) return stale;
+      throw err;
+    };
 
     const url = new URL(`${baseUrl}${actualEndpoint}`);
     Object.entries(params).forEach(([k, v]) => {
@@ -154,25 +194,33 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
         signal: AbortSignal.timeout(10_000),
       });
     } catch (cause) {
-      const err = new Error('API request timed out or failed');
+      const err: any = new Error('API request timed out or failed');
       err.statusCode = 503;
       err.cause = cause;
-      throw err;
+      return serveStaleOrThrow(err);
     }
 
     if (!res.ok) {
-      const err = new Error(`API responded with ${res.status}`);
+      if (res.status === 429) {
+        try { await redis.setex(cooldownKey, RATE_LIMIT_COOLDOWN, '1'); } catch { /* non-fatal */ }
+      }
+      const err: any = new Error(`API responded with ${res.status}`);
       err.statusCode = res.status === 429 ? 429 : 502;
-      throw err;
+      return serveStaleOrThrow(err);
     }
 
     const json = await res.json();
 
     if (json.errors && Object.keys(json.errors).length > 0) {
       const msg = Object.values(json.errors).join(', ');
-      const err = new Error(`API Error: ${msg}`);
-      err.statusCode = 400;
-      throw err;
+      // API-Sports reports quota exhaustion inside errors with a 200 status.
+      const rateLimited = /limit|requests/i.test(msg);
+      if (rateLimited) {
+        try { await redis.setex(cooldownKey, RATE_LIMIT_COOLDOWN, '1'); } catch { /* non-fatal */ }
+      }
+      const err: any = new Error(`API Error: ${msg}`);
+      err.statusCode = rateLimited ? 429 : 400;
+      return serveStaleOrThrow(err);
     }
 
     let responseData = json.response;
@@ -225,8 +273,11 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
     }
 
     const cacheTtl = ttl ?? resolveTtl(actualEndpoint, params);
+    const serialized = JSON.stringify(responseData);
     try {
-      await redis.setex(cacheKey, cacheTtl, JSON.stringify(responseData));
+      await redis.setex(cacheKey, cacheTtl, serialized);
+      // Keep a long-lived stale copy for serve-on-error fallback.
+      await redis.setex(staleKey, STALE_TTL, serialized);
     } catch {
       // Cache write failure is non-fatal
     }
@@ -266,7 +317,7 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
     return apiFetch('/fixtures/statistics', { ...idParam, sport });
   }
 
-  function getMatchPlayerStats(gameId, sport = 'basketball') {
+  function getMatchPlayerStats(gameId, sport = 'football') {
     const idParam = sport === 'football' ? { fixture: gameId } : { id: gameId };
     return apiFetch('/fixtures/players', { ...idParam, sport });
   }
@@ -368,12 +419,15 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
   }
 
   async function getSports() {
+    // Only football is wired end-to-end. Other sports are listed so the UI can
+    // show them as "coming soon", but they are not active and trigger no API
+    // calls — keeps the daily API-Football quota focused on football.
     return [
-      { id: 'football', label: 'Football' },
-      { id: 'basketball', label: 'Basketball' },
-      { id: 'baseball', label: 'Baseball' },
-      { id: 'hockey', label: 'Hockey' },
-      { id: 'volleyball', label: 'Volleyball' },
+      { id: 'football',   label: 'Football',   active: true },
+      { id: 'basketball', label: 'Basketball', active: false, comingSoon: true },
+      { id: 'baseball',   label: 'Baseball',   active: false, comingSoon: true },
+      { id: 'hockey',     label: 'Hockey',     active: false, comingSoon: true },
+      { id: 'volleyball', label: 'Volleyball', active: false, comingSoon: true },
     ];
   }
 

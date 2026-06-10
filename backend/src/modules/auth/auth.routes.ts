@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { forgotPassword, login, register, resetPassword, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
+import { forgotPassword, login, logout, register, resetPassword, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
 import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, verifyOTPSchema } from './auth.schemas.js';
 import { registerAdmin } from '../../features/auth/controllers/auth.controller.js';
 
@@ -17,13 +17,17 @@ const adminRegisterSchema = {
   },
 };
 
+const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+const strictRateLimit = { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } };
+
 async function authRoutes(fastify) {
-  fastify.post('/auth/register', { schema: registerSchema }, register);
-  fastify.post('/auth/verify-otp', { schema: verifyOTPSchema }, verifyOTP);
-  fastify.post('/auth/login', { schema: loginSchema }, login);
-  fastify.post('/auth/forgot-password', { schema: forgotPasswordSchema }, forgotPassword);
-  fastify.post('/auth/reset-password', { schema: resetPasswordSchema }, resetPassword);
-  fastify.post('/auth/admin/register', { schema: adminRegisterSchema }, registerAdmin);
+  fastify.post('/auth/register',      { schema: registerSchema,       ...authRateLimit   }, register);
+  fastify.post('/auth/verify-otp',    { schema: verifyOTPSchema,      ...authRateLimit   }, verifyOTP);
+  fastify.post('/auth/login',         { schema: loginSchema,          ...authRateLimit   }, login);
+  fastify.post('/auth/forgot-password', { schema: forgotPasswordSchema, ...strictRateLimit }, forgotPassword);
+  fastify.post('/auth/reset-password',  { schema: resetPasswordSchema,  ...authRateLimit   }, resetPassword);
+  fastify.post('/auth/admin/register',  { schema: adminRegisterSchema,  ...strictRateLimit }, registerAdmin);
+  fastify.post('/auth/logout', logout);
 }
 
 export default fp(authRoutes, { name: 'auth-routes', fastify: '5.x' });

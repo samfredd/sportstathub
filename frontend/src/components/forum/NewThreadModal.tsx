@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { communityApi } from "@/lib/communityApi";
+import { isAuthed } from "@/lib/session";
 
 const CATEGORIES = ["General Discussion", "Match Analysis", "Betting Strategy", "Injury News", "Bookmaker Codes"];
 
@@ -18,7 +19,7 @@ export default function NewThreadModal({ isOpen, onClose }: NewThreadModalProps)
   // Lock scroll and check auth
   useEffect(() => {
     if (isOpen) {
-      if (!window.localStorage?.getItem("token")) {
+      if (!isAuthed()) {
         router.push("/auth/login?redirect=/forum");
       }
       document.body.style.overflow = "hidden";

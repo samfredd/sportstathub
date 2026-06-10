@@ -64,7 +64,13 @@ export function createCommunityService(repo, footballService?) {
     if (!['creator', 'admin'].includes(user.role)) {
       throw forbidden('Only creators can publish predictions');
     }
-    const row = await repo.createPrediction(user.id, payload);
+    const safePayload = user.role === 'admin' ? payload : {
+      ...payload,
+      status: 'open',
+      isTrending: false,
+      isPremium: false,
+    };
+    const row = await repo.createPrediction(user.id, safePayload);
     return mapPrediction(row);
   }
 
@@ -134,12 +140,13 @@ export function createCommunityService(repo, footballService?) {
 
   async function getPlatformStats() {
     const [row, liveMatches] = await Promise.all([
-      repo.getPlatformStats(),
+      repo.getPlatformStats().catch(() => ({})),
       footballService
         ? footballService.getLiveMatches().then((d: any) => Array.isArray(d) ? d.length : 0).catch(() => 0)
         : Promise.resolve(0),
     ]);
-    return { ...mapPlatformStats(row), liveMatches };
+    const base = mapPlatformStats(row);
+    return { ...base, liveMatches };
   }
 
   async function getLeaderboard() {

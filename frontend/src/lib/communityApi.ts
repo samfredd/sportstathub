@@ -21,6 +21,7 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const authToken = token();
   const res = await fetch(`${BASE}${path}`, {
     ...options,
+    credentials: "include", // send the httpOnly auth cookie
     headers: {
       "Content-Type": "application/json",
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

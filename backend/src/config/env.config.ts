@@ -2,9 +2,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+if (!process.env.SECRET_KEY) {
+  throw new Error('SECRET_KEY environment variable is required — server cannot start without a JWT signing secret');
+}
+
 const config = {
   port: Number(process.env.PORT || 4000),
-  secretKey: process.env.SECRET_KEY,
+  secretKey: process.env.SECRET_KEY as string,
   databaseUrl: process.env.DATABASE_URL,
   jwtExpiration: parseInt(process.env.JWT_EXPIRATION, 10) || 3600,
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",

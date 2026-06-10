@@ -35,10 +35,18 @@ Phase 3 — Auth-unified, Prisma/Clerk-free platform. Community module active. T
 | 17 | Implemented creator follow full stack: `004_follows.sql` migration → `toggleFollow`/`isFollowing` repo fns → service → controller → `POST /api/creators/:id/follow` route → `communityApi.followCreator` → creator profile page | 2026-05-03 |
 | 18 | Updated all context files to reflect current architecture | 2026-05-03 |
 | 19 | Added backend premium access control: central auth/pro/admin guards, active subscription checks, feature-flag route enforcement, premium prediction masking, and admin premium toggles | 2026-05-15 |
+| 20 | Focused live-data API on football only: `getSports()` marks other sports `comingSoon`; home + sidebar fetch leagues/matches for active sports only; sport selectors render non-football as disabled "Soon" chips — eliminates the per-load multi-sport league fan-out that burned the API-Football daily quota | 2026-06-10 |
+| 21 | Hardened football API caching: serve-stale-on-error (24h stale copy) + 429 cooldown marker in `football.service.ts apiFetch`, so quota exhaustion degrades to last-good data instead of 429/502; bumped leagues TTL to 6h | 2026-06-10 |
+| 22 | Match detail Smart Analyse now recomputes Data Signals + win-probability model client-side from fetched live stats (`deriveSignals`/`deriveModel` in `_tabs.tsx`) instead of leaving them H2H-only | 2026-06-10 |
+| 23 | Fixed `getMatchPlayerStats` defaulting to basketball (service + controller) — now defaults to football | 2026-06-10 |
+| 24 | Added shared HTTP cache-header helper (`helpers/http-cache.helpers.ts`): `cache(ttl, scope)` + encapsulated `onSend` hook. Applied to football, odds, and news read routes — public scope for shared data (CDN-cacheable), private scope for pro-gated odds/stats endpoints; `stale-while-revalidate = 4×ttl` pairs with service serve-stale | 2026-06-10 |
+| 25 | Fixed xG stat always showing 0 on match pages: `_tabs.tsx` STAT_API_KEY mapped xG to "Expected Goals" but API-Football returns `expected_goals`; now maps correctly with a defensive fallback in extractStat/getRowStatScore. Removed the "Tackles" stat pill (provider never returns tackles). Verified across leagues | 2026-06-10 |
+| 26 | Fixed React hydration error on home page: `TrendingHeroCarousel` HeroPredSlide had a `<Link>` ("See all trending") nested inside the card `<Link>` (invalid `<a>`-in-`<a>`); converted the inner link to a `router.push` button. Verified 0 nested anchors in DOM | 2026-06-10 |
+| 27 | Fixed UpgradeModal showing "current plan — Free" for paying users: now reads `useSubscription()`, shows the real current plan + its features, and only offers strictly-higher tiers (tier-aware header/upsell). Verified a Pro user hitting the enterprise AI gate sees "current plan — PRO" upselling Enterprise only | 2026-06-10 |
 
 ## Active Work
 
-Premium access audit completed.
+Football-focus + caching pass completed. Non-football sports parked as "coming soon" (Q3 deferred until a multi-sport data pipeline is built).
 
 ## Next Steps
 

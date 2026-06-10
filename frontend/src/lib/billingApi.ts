@@ -10,6 +10,7 @@ async function billingFetch(path: string, options: RequestInit = {}): Promise<an
   const hasBody = options.body !== undefined && options.body !== null;
   const res = await fetch(`${BASE}${path}`, {
     ...options,
+    credentials: "include", // send the httpOnly auth cookie
     headers: {
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

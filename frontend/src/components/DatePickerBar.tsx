@@ -258,19 +258,31 @@ export default function DatePickerBar({
 
       {/* ── MOBILE-ONLY: Sport selector ──────────────────────────────────── */}
       <div className="lg:hidden flex items-center gap-1 px-3 pt-2 pb-1 overflow-x-auto no-scrollbar">
-        {MATCH_SPORT_OPTIONS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => onSportChange(id)}
-            className={`shrink-0 px-3 py-1 text-[10px] font-black uppercase tracking-wide rounded-lg border transition-all cursor-pointer ${
-              activeSport === id
-                ? "bg-accent/20 text-accent border-accent/25"
-                : "text-muted border-transparent hover:bg-surface-hover hover:text-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {MATCH_SPORT_OPTIONS.map((sport) => {
+          const comingSoon = "comingSoon" in sport && sport.comingSoon;
+          return (
+            <button
+              key={sport.id}
+              onClick={() => !comingSoon && onSportChange(sport.id)}
+              disabled={comingSoon}
+              title={comingSoon ? "Coming soon" : undefined}
+              className={`shrink-0 flex items-center gap-1 px-3 py-1 text-[10px] font-black uppercase tracking-wide rounded-lg border transition-all ${
+                comingSoon
+                  ? "text-muted/40 border-transparent cursor-not-allowed"
+                  : activeSport === sport.id
+                  ? "bg-accent/20 text-accent border-accent/25 cursor-pointer"
+                  : "text-muted border-transparent hover:bg-surface-hover hover:text-foreground cursor-pointer"
+              }`}
+            >
+              {sport.label}
+              {comingSoon && (
+                <span className="px-1 py-0.5 rounded bg-muted/15 text-muted/60 text-[7px] tracking-wider">
+                  SOON
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── MOBILE-ONLY: Date + League dropdown row ──────────────────────── */}

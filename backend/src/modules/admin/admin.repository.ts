@@ -383,11 +383,11 @@ export function createAdminRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createAdminPrediction({ userId, sport, league, matchData, prediction, isPremium = false, tags = [], isTrending = false }) {
+  async function createAdminPrediction({ userId, sport, league, matchData, prediction, isPremium = false, tags = [], isTrending = false, fixtureId = null }) {
     const { rows } = await db.query(
       `INSERT INTO predictions
-         (user_id, sport, league, match_data, prediction, is_premium, tags, is_trending, status)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, 'open')
+         (user_id, sport, league, match_data, prediction, is_premium, tags, is_trending, status, fixture_id)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, 'open', $9)
        RETURNING *`,
       [
         userId,
@@ -398,6 +398,7 @@ export function createAdminRepository(db) {
         isPremium,
         tags,
         isTrending,
+        fixtureId ?? matchData?.fixtureId ?? matchData?.id ?? null,
       ]
     );
     return rows[0];

@@ -37,14 +37,18 @@ export default function SubscriptionPage() {
   });
 
   useEffect(() => {
+    let mounted = true;
     Promise.all([
       communityApi.getMe().catch(() => null),
-      billingApi.getPlans().catch(() => []),
+      billingApi.getPlans().catch(() => [] as Plan[]),
     ]).then(([p, pl]) => {
+      if (!mounted) return;
       setProfile(p);
+      if (!p) setMessage("Could not load your profile. Please refresh.");
       setPlans(Array.isArray(pl) ? pl : []);
       setLoading(false);
     });
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -53,19 +57,28 @@ export default function SubscriptionPage() {
     const reference = params.get("reference") || params.get("trxref");
     if (!reference) return;
 
+    let mounted = true;
+
     billingApi.verifyPaystack(reference)
       .then(() => communityApi.getMe())
       .then((nextProfile) => {
+        if (!mounted) return;
         setProfile(nextProfile);
         setMessage("Payment confirmed. Your subscription is active.");
       })
-      .catch((error) => setMessage(error.message || "Payment could not be verified."))
+      .catch((error) => {
+        if (!mounted) return;
+        setMessage(error.message || "Payment could not be verified.");
+      })
       .finally(() => {
-        params.delete("reference");
-        params.delete("trxref");
-        const query = params.toString();
+        const p = new URLSearchParams(window.location.search);
+        p.delete("reference");
+        p.delete("trxref");
+        const query = p.toString();
         window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
       });
+
+    return () => { mounted = false; };
   }, []);
 
   const currentPlan = profile?.subscription_plan || "free";
@@ -91,6 +104,8 @@ export default function SubscriptionPage() {
     setMessage(null);
     try {
       const checkout = await billingApi.initializePaystack({ plan: plan.slug, interval: billingInterval });
+      // Reset before navigation so back-button doesn't leave a stuck loading state
+      setCheckoutLoading(null);
       window.location.assign(checkout.authorizationUrl);
     } catch (error: any) {
       setMessage(error.message || "Unable to start checkout.");

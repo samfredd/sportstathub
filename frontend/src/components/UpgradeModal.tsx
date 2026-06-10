@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { XIcon, CheckCircleIcon, CrownIcon } from "@/components/Icons";
 import { billingApi } from "@/lib/billingApi";
+import { useSubscription } from "@/hooks/useSubscription";
+
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, enterprise: 2 };
 
 interface Props {
   open: boolean;
@@ -62,13 +65,26 @@ export default function UpgradeModal({ open, onClose, feature }: Props) {
     };
   }, [open]);
 
+  // Resolve the user's real current tier so the modal reflects what they
+  // actually have and only upsells higher tiers (admins are treated as top).
+  const { plan: currentPlanSlug, isAdmin } = useSubscription();
+  const currentSlug = (isAdmin ? "enterprise" : (currentPlanSlug ?? "free")).toLowerCase();
+  const currentRank = PLAN_RANK[currentSlug] ?? 0;
+
   const freePlan = useMemo(() => plans.find((plan) => plan.slug === "free"), [plans]);
-  const paidPlans = useMemo(
-    () => plans.filter((plan) => plan.is_active && plan.slug !== "free"),
-    [plans]
+  const currentPlan = useMemo(
+    () => plans.find((plan) => plan.slug === currentSlug) ?? freePlan,
+    [plans, currentSlug, freePlan]
   );
-  const highlightedPlan = paidPlans.find((plan) => plan.is_popular) ?? paidPlans[0] ?? null;
-  const freeFeatures = freePlan?.features?.length ? freePlan.features : FALLBACK_FREE_FEATURES;
+  // Only tiers strictly above the user's current plan are upgrades.
+  const upgradePlans = useMemo(
+    () => plans
+      .filter((plan) => plan.is_active && plan.slug !== "free")
+      .filter((plan) => (PLAN_RANK[plan.slug.toLowerCase()] ?? 99) > currentRank),
+    [plans, currentRank]
+  );
+  const highlightedPlan = upgradePlans.find((plan) => plan.is_popular) ?? upgradePlans[0] ?? null;
+  const currentFeatures = currentPlan?.features?.length ? currentPlan.features : FALLBACK_FREE_FEATURES;
 
   if (!open) return null;
 
@@ -113,10 +129,10 @@ export default function UpgradeModal({ open, onClose, feature }: Props) {
         {/* Free tier */}
         <div className="px-5 py-3 border-b border-border/40 bg-background/40">
           <p className="text-[10px] font-black text-muted uppercase tracking-wider mb-2">
-            Your current plan — {freePlan?.display_name ?? "Free"}
+            Your current plan — {currentPlan?.display_name ?? "Free"}
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {freeFeatures.map(f => (
+            {currentFeatures.map(f => (
               <span key={f} className="flex items-center gap-1 text-[11px] text-muted">
                 <CheckCircleIcon className="w-3 h-3 text-muted/50 shrink-0" />
                 {f}
@@ -140,7 +156,7 @@ export default function UpgradeModal({ open, onClose, feature }: Props) {
               </div>
             )}
 
-            {!loading && paidPlans.map((plan) => {
+            {!loading && upgradePlans.map((plan) => {
               const features = plan.features?.length ? plan.features : [];
               return (
                 <div key={plan.id} className="rounded-xl border border-accent/40 bg-accent/5 p-5">
@@ -170,10 +186,12 @@ export default function UpgradeModal({ open, onClose, feature }: Props) {
               );
             })}
 
-            {!loading && paidPlans.length === 0 && (
+            {!loading && upgradePlans.length === 0 && (
               <div className="rounded-xl border border-border/40 bg-surface/40 p-5">
                 <p className="text-[12px] font-bold text-muted">
-                  No active paid plans are available right now.
+                  {currentRank > 0
+                    ? "You're on our highest plan — you have access to everything."
+                    : "No active paid plans are available right now."}
                 </p>
               </div>
             )}
@@ -184,7 +202,7 @@ export default function UpgradeModal({ open, onClose, feature }: Props) {
               className="w-full flex items-center justify-center py-2.5 rounded-lg text-[12px] font-black text-white transition-all hover:opacity-90"
               style={{ background: "var(--accent-gradient, var(--accent))" }}
             >
-              View Plans →
+              {currentRank > 0 ? "Manage plan →" : "View Plans →"}
             </Link>
           </div>
         </div>

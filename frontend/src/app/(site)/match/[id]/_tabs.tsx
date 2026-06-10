@@ -74,7 +74,8 @@ const STAT_TYPES = [
   { id: "shots",      label: "Shots" },
   { id: "sot",        label: "Shots on Target" },
   { id: "saves",      label: "Saves" },
-  { id: "tackles",    label: "Tackles" },
+  // "Tackles" intentionally omitted: API-Football's /fixtures/statistics never
+  // returns a tackles field for any league, so the pill could only ever show 0.
 ];
 
 // Maps our stat type IDs to API-Football statistic type strings.
@@ -84,11 +85,13 @@ const STAT_API_KEY: Partial<Record<StatTypeId, string>> = {
   fouls:      "Fouls",
   offsides:   "Offsides",
   possession: "Ball Possession",
-  xg:         "Expected Goals",
+  // API-Football returns the xG stat under the type key "expected_goals"
+  // (lowercase, underscore), NOT "Expected Goals". rawStatVal falls back to the
+  // capitalised form just in case a provider variant ever uses it.
+  xg:         "expected_goals",
   shots:      "Total Shots",
   sot:        "Shots on Goal",
   saves:      "Goalkeeper Saves",
-  tackles:    "Tackles",
   // "cards"      → handled specially below (Yellow Cards + Red Cards)
   // "goals"      → from FormMatch.teamGoals / oppGoals (no stats fetch needed)
   // "possession" → percentage value ("55%"); special-cased in helpers
@@ -125,6 +128,63 @@ function statDisplay(statsData: any, teamIndex: number, label: string) {
   const raw = statsData?.[teamIndex]?.statistics?.find((item: any) => item.type === label)?.value;
   if (raw === null || raw === undefined) return "0";
   return String(raw);
+}
+
+// Recompute the derived "Data Signals" and win-probability model on the client
+// once live statistics arrive. The server renders these from null stats (to
+// avoid a blocking stats fetch), so for live/finished matches they would
+// otherwise stay H2H-only. Mirrors buildSignals/outcomeModel in page.tsx.
+function deriveSignals(match: any, statsData: any, trend: any): any[] {
+  const signals: any[] = [];
+  const possessionHome = statValue(statsData, 0, "Ball Possession");
+  const possessionAway = statValue(statsData, 1, "Ball Possession");
+  const shotsHome = statValue(statsData, 0, "Shots on Goal");
+  const shotsAway = statValue(statsData, 1, "Shots on Goal");
+  const cornersHome = statValue(statsData, 0, "Corner Kicks");
+  const cornersAway = statValue(statsData, 1, "Corner Kicks");
+  const cardsHome = statValue(statsData, 0, "Yellow Cards") + statValue(statsData, 0, "Red Cards") * 2;
+  const cardsAway = statValue(statsData, 1, "Yellow Cards") + statValue(statsData, 1, "Red Cards") * 2;
+
+  if (possessionHome || possessionAway) {
+    const leader = possessionHome >= possessionAway ? match.homeTeam : match.awayTeam;
+    signals.push({ label: "Control", value: `${leader} control more of the ball`, detail: `${statDisplay(statsData, 0, "Ball Possession")} vs ${statDisplay(statsData, 1, "Ball Possession")} possession.` });
+  }
+  if (shotsHome || shotsAway) {
+    const edge = shotsHome - shotsAway;
+    signals.push({ label: "Shot Quality", value: Math.abs(edge) >= 2 ? `${edge > 0 ? match.homeTeam : match.awayTeam} are creating the cleaner chances` : "Chance quality is close", detail: `${shotsHome} - ${shotsAway} shots on goal.` });
+  }
+  if (cornersHome + cornersAway > 0) {
+    signals.push({ label: "Set Pieces", value: `${cornersHome + cornersAway} total corners`, detail: cornersHome === cornersAway ? "Set-piece pressure is even." : `${cornersHome > cornersAway ? match.homeTeam : match.awayTeam} have the corner edge.` });
+  }
+  if (cardsHome + cardsAway > 0) {
+    signals.push({ label: "Discipline", value: cardsHome === cardsAway ? "Discipline risk is balanced" : `${cardsHome > cardsAway ? match.homeTeam : match.awayTeam} carry more card risk`, detail: `Weighted card count: ${cardsHome} - ${cardsAway}.` });
+  }
+  if (trend.played?.length > 0) {
+    signals.push({ label: "H2H Goals", value: `${trend.avgGoals} goals per H2H meeting`, detail: `${trend.bttsPct}% BTTS and ${trend.over25Pct}% over 2.5 across ${trend.played.length} recent meetings.` });
+  }
+  if (!signals.length) {
+    signals.push({ label: "Pre-match", value: "Live analytics unlock after match events arrive", detail: `${match.homeTeam} and ${match.awayTeam} have limited live data available right now.` });
+  }
+  return signals.slice(0, 5);
+}
+
+function deriveModel(match: any, statsData: any, h2hStats: H2HStats): { home: number; draw: number; away: number } {
+  let home = 33, draw = 34, away = 33;
+  home += h2hStats.homeWins * 3;
+  away += h2hStats.awayWins * 3;
+  draw += h2hStats.draws * 2;
+  const shotEdge = statValue(statsData, 0, "Shots on Goal") - statValue(statsData, 1, "Shots on Goal");
+  const possessionEdge = statValue(statsData, 0, "Ball Possession") - statValue(statsData, 1, "Ball Possession");
+  home += Math.max(shotEdge, 0) * 4 + Math.max(possessionEdge, 0) * 0.25;
+  away += Math.max(-shotEdge, 0) * 4 + Math.max(-possessionEdge, 0) * 0.25;
+  if (match.score) {
+    const [hg, ag] = String(match.score).split("-").map((s: string) => Number.parseInt(s.trim(), 10));
+    if (hg > ag) home += 18;
+    if (ag > hg) away += 18;
+    if (hg === ag) draw += 10;
+  }
+  const total = home + draw + away;
+  return { home: pct(home, total), draw: pct(draw, total), away: pct(away, total) };
 }
 
 function eventMinute(event: any) {
@@ -211,6 +271,13 @@ function extractStat(
       opp:  rawStatVal(statsArr, oi, "Ball Possession"),
     };
   }
+  if (statType === "xg") {
+    // API key is "expected_goals"; fall back to "Expected Goals" defensively
+    return {
+      team: rawStatVal(statsArr, ti, "expected_goals", "Expected Goals"),
+      opp:  rawStatVal(statsArr, oi, "expected_goals", "Expected Goals"),
+    };
+  }
   const label = STAT_API_KEY[statType];
   if (!label) return { team: 0, opp: 0 };
   return { team: rawStatVal(statsArr, ti, label), opp: rawStatVal(statsArr, oi, label) };
@@ -294,6 +361,11 @@ function getRowStatScore(f: FormMatch, statType: StatTypeId, cache: StatsCache):
     awayVal = rawStatVal(stats, 1, "Ball Possession");
     return `${homeVal}%-${awayVal}%`;
   }
+  if (statType === "xg") {
+    homeVal = rawStatVal(stats, 0, "expected_goals", "Expected Goals");
+    awayVal = rawStatVal(stats, 1, "expected_goals", "Expected Goals");
+    return `${homeVal}-${awayVal}`;
+  }
 
   const label = STAT_API_KEY[statType];
   if (!label) return "—";
@@ -335,6 +407,18 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
   const homeLineup = clientLineups.find((item: any) => item.team?.id === props.match.homeId) ?? clientLineups[0];
   const awayLineup = clientLineups.find((item: any) => item.team?.id === props.match.awayId) ?? clientLineups[1];
 
+  // Once live stats land, recompute the derived signals + win model so the
+  // Stats and Predictions panels reflect real numbers, not the H2H-only
+  // server fallback. Falls back to the server props before stats arrive.
+  const signals = useMemo(
+    () => (clientStatsData ? deriveSignals(props.match, clientStatsData, props.trend) : props.signals),
+    [clientStatsData, props.match, props.trend, props.signals],
+  );
+  const model = useMemo(
+    () => (clientStatsData ? deriveModel(props.match, clientStatsData, props.h2hStats) : props.model),
+    [clientStatsData, props.match, props.h2hStats, props.model],
+  );
+
   const enrichedProps: MatchTabsProps = {
     ...props,
     matchStats,
@@ -344,6 +428,8 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
     awayLineup,
     predictions: clientPredictions,
     injuries: clientInjuries,
+    signals,
+    model,
   };
 
   // Broadcast the active stat to sibling components (e.g. venue strip indicator)

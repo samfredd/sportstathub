@@ -130,9 +130,10 @@ export default function NewsPage() {
   const load = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const res  = await fetch(`${BASE}/api/news?limit=100&page=1`);
+      const res  = await fetch(`${BASE}/api/news?limit=60&page=${p}`);
       const json = await res.json();
-      setAll(json?.data?.items ?? []);
+      const items: NewsItem[] = json?.data?.items ?? [];
+      setAll(prev => p === 1 ? items : [...prev, ...items]);
       setTotal(json?.data?.total ?? 0);
     } catch {}
     setLoading(false);
@@ -150,9 +151,9 @@ export default function NewsPage() {
     return true;
   });
 
-  const featured  = filtered.slice(0, 3);
-  const rest      = filtered.slice(3, 3 + PER_PAGE * page);
-  const hasMore   = filtered.length > 3 + PER_PAGE * page;
+  const featured = filtered.slice(0, 3);
+  const rest     = filtered.slice(3);
+  const hasMore  = all.length < total;
 
   return (
     <main className="max-w-[1200px] mx-auto px-4 lg:px-6 py-6 space-y-6">
@@ -226,10 +227,15 @@ export default function NewsPage() {
           {hasMore && (
             <div className="flex justify-center pt-2">
               <button
-                onClick={() => setPage(p => p + 1)}
-                className="px-6 py-2.5 rounded-xl bg-surface border border-border/60 text-sm font-bold text-muted hover:text-foreground hover:border-accent/40 transition-all"
+                onClick={() => {
+                  const next = page + 1;
+                  setPage(next);
+                  load(next);
+                }}
+                disabled={loading}
+                className="px-6 py-2.5 rounded-xl bg-surface border border-border/60 text-sm font-bold text-muted hover:text-foreground hover:border-accent/40 transition-all disabled:opacity-50"
               >
-                Load more
+                {loading ? "Loading…" : "Load more"}
               </button>
             </div>
           )}

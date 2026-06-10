@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { communityApi } from "@/lib/communityApi";
-
-function decodeJwt(token: string) {
-  try { return JSON.parse(atob(token.split(".")[1])) as any; } catch { return null; }
-}
+import { getSessionUser } from "@/lib/session";
 
 export default function DashboardOverviewPage() {
   const router   = useRouter();
@@ -16,10 +13,8 @@ export default function DashboardOverviewPage() {
   const [dashboard, setDashboard] = useState<any>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) { router.replace("/auth/login"); return; }
-    const u = decodeJwt(token);
-    if (!u || (u.exp && u.exp < Date.now() / 1000)) { router.replace("/auth/login"); return; }
+    const u = getSessionUser();
+    if (!u) { router.replace("/auth/login"); return; }
     setUser(u);
     const isCreator = u?.role === "creator";
     Promise.all([

@@ -67,8 +67,8 @@ export function createCommunityRepository(db) {
   async function createPrediction(userId, payload) {
     const { rows } = await db.query(
       `INSERT INTO predictions
-        (user_id, sport, league, match_data, prediction, booking_code, status, stats, tags, is_trending, is_premium)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (user_id, sport, league, match_data, prediction, booking_code, status, stats, tags, is_trending, is_premium, fixture_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         userId,
@@ -82,6 +82,9 @@ export function createCommunityRepository(db) {
         payload.tags ?? [],
         Boolean(payload.isTrending),
         Boolean(payload.isPremium),
+        // Fixture id enables automatic settlement. Accept it from the payload or
+        // fall back to a fixtureId nested in the match object.
+        payload.fixtureId ?? payload.match?.fixtureId ?? payload.match?.id ?? null,
       ]
     );
     return findPredictionById(rows[0].id);
@@ -253,7 +256,6 @@ export function createCommunityRepository(db) {
          ), 0)::float AS win_rate,
          (SELECT COUNT(*)::int FROM tracking_events WHERE event_name = 'code_copy') AS code_copies,
          (SELECT COUNT(*)::int FROM users WHERE role IN ('creator', 'admin')) AS creators,
-         0::int AS live_matches,
          (SELECT COUNT(*)::int FROM forum_threads) AS forum_posts
        FROM predictions p`
     );
@@ -290,7 +292,7 @@ export function createCommunityRepository(db) {
   }
 
   async function getCreatorDashboard(userId) {
-    const [creator, predictionsResult, weeklyResult, topCodesResult] = await Promise.all([
+    const [creator, predictionsResult, weeklyResult, topCodesResult, weeklyChangeResult, followersResult] = await Promise.all([
       findCreatorById(userId),
       db.query(
         `SELECT p.*, ${userColumns}
@@ -337,6 +339,40 @@ export function createCommunityRepository(db) {
          LIMIT 10`,
         [userId]
       ),
+      // Week-over-week comparison for clicks and conversions
+      db.query(
+        `SELECT
+           COUNT(*) FILTER (
+             WHERE event_name IN ('code_copy','bookmaker_open')
+               AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+           )::int AS this_clicks,
+           COUNT(*) FILTER (
+             WHERE event_name = 'conversion'
+               AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+           )::int AS this_conversions,
+           COUNT(*) FILTER (
+             WHERE event_name IN ('code_copy','bookmaker_open')
+               AND created_at >= CURRENT_DATE - INTERVAL '14 days'
+               AND created_at < CURRENT_DATE - INTERVAL '7 days'
+           )::int AS prev_clicks,
+           COUNT(*) FILTER (
+             WHERE event_name = 'conversion'
+               AND created_at >= CURRENT_DATE - INTERVAL '14 days'
+               AND created_at < CURRENT_DATE - INTERVAL '7 days'
+           )::int AS prev_conversions
+         FROM tracking_events
+         WHERE creator_id = $1::text
+            OR prediction_id IN (SELECT id::text FROM predictions WHERE user_id = $1)`,
+        [userId]
+      ),
+      // Followers gained this week
+      db.query(
+        `SELECT COUNT(*)::int AS followers_gained
+         FROM creator_follows
+         WHERE creator_id = $1
+           AND created_at >= CURRENT_DATE - INTERVAL '7 days'`,
+        [userId]
+      ),
     ]);
 
     const predictions = predictionsResult.rows;
@@ -359,6 +395,19 @@ export function createCommunityRepository(db) {
     const totalClicks = topCodes.reduce((sum, code) => sum + code.clicks, 0);
     const totalConversions = topCodes.reduce((sum, code) => sum + code.conversions, 0);
 
+    const wc = weeklyChangeResult.rows[0] ?? {};
+    const thisClicks      = Number(wc.this_clicks ?? 0);
+    const thisConversions = Number(wc.this_conversions ?? 0);
+    const prevClicks      = Number(wc.prev_clicks ?? 0);
+    const prevConversions = Number(wc.prev_conversions ?? 0);
+
+    function pctChange(current: number, prev: number): number {
+      if (prev === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - prev) / prev) * 100);
+    }
+
+    const followersGained = Number(followersResult.rows[0]?.followers_gained ?? 0);
+
     return {
       creator,
       predictions,
@@ -367,11 +416,16 @@ export function createCommunityRepository(db) {
         totalConversions,
         estimatedEarnings: totalConversions * 100,
         currency: '$',
-        followersGained: 0,
+        followersGained,
         winRate: decided.length ? Math.round((wins / decided.length) * 1000) / 10 : 0,
         activeCodes: topCodes.length,
         conversionRate: totalClicks ? Math.round((totalConversions / totalClicks) * 1000) / 10 : 0,
-        weeklyChange: { clicks: 0, conversions: 0, earnings: 0, followers: 0 },
+        weeklyChange: {
+          clicks:      pctChange(thisClicks, prevClicks),
+          conversions: pctChange(thisConversions, prevConversions),
+          earnings:    pctChange(thisConversions * 100, prevConversions * 100),
+          followers:   followersGained,
+        },
       },
       chartData: weeklyResult.rows.map(row => ({
         day: row.day,

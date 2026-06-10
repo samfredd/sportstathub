@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { communityApi } from "@/lib/communityApi";
 import AdCarousel, { HERO_SLIDES } from "@/components/AdCarousel";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
@@ -14,6 +15,7 @@ function HeroPredSlide({ prediction, totalSlides }: { prediction: any; totalSlid
   const { match, prediction: pred, creator, sport, league, bookingCode, status } = prediction;
   const { copied, copy } = useCopyToClipboard();
   const { trackCodeCopy } = useTrackingClick();
+  const router = useRouter();
 
   const statusColour = {
     open: { text: "text-accent",   bg: "bg-accent/10",   border: "border-accent/20"   },
@@ -87,10 +89,17 @@ function HeroPredSlide({ prediction, totalSlides }: { prediction: any; totalSlid
           </div>
 
           {/* Right: confidence ring + see all link (desktop) */}
+          {/* Rendered as a button (not a Link) because this card is already
+              wrapped in a Link — a nested <a> is invalid HTML and triggers a
+              React hydration error. */}
           <div className="hidden lg:flex flex-col items-end gap-3 shrink-0 self-end pb-1">
-            <Link href="/predictions?filter=trending" className="text-[11px] text-accent font-black hover:underline flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push("/predictions?filter=trending"); }}
+              className="text-[11px] text-accent font-black hover:underline flex items-center gap-1 cursor-pointer"
+            >
               See all trending <ArrowRightIcon className="w-3 h-3" />
-            </Link>
+            </button>
           </div>
         </div>
       </div>

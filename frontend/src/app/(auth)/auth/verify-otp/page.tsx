@@ -3,6 +3,7 @@
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { setSessionUser } from "@/lib/session";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -46,13 +47,13 @@ function VerifyOTPContent() {
     try {
       const res = await fetch(`${BASE}/auth/verify-otp`, {
         method: "POST",
+        credentials: "include", // let the browser store the httpOnly auth cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Verification failed");
-      if (data.data?.token) localStorage.setItem("token", data.data.token);
-      window.dispatchEvent(new Event("storage"));
+      setSessionUser(data.data?.user ?? null);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);

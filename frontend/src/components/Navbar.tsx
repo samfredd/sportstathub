@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { SearchIcon, LockIcon } from "./Icons";
 import ThemeToggle from "./ThemeToggle";
 import { useState, useEffect, useRef } from "react";
+import { getSessionUser, logout as sessionLogout, type SessionUser } from "@/lib/session";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/",           label: "Matches" },
@@ -16,34 +17,16 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/stats",      label: "Stats" },
 ];
 
-interface StoredUser {
-  email?: string;
-  avatar_url?: string;
-  exp?: number;
-}
-
-function getStoredUser(): StoredUser | null {
-  try {
-    const token = window.localStorage?.getItem("token");
-    if (!token) return null;
-    const payload = JSON.parse(window.atob(token.split(".")[1])) as StoredUser;
-    return payload?.exp && payload.exp > Date.now() / 1000 ? payload : null;
-  } catch {
-    return null;
-  }
-}
-
-
 export default function Navbar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    queueMicrotask(() => setUser(getStoredUser()));
+    queueMicrotask(() => setUser(getSessionUser()));
 
-    function syncUser() { setUser(getStoredUser()); }
+    function syncUser() { setUser(getSessionUser()); }
     window.addEventListener("storage", syncUser);
     return () => window.removeEventListener("storage", syncUser);
   }, []);
@@ -59,11 +42,8 @@ export default function Navbar() {
   }, []);
 
   function handleLogout() {
-    try {
-      window.localStorage?.removeItem("token");
-    } catch {}
     setUser(null);
-    window.location.href = "/";
+    void sessionLogout().finally(() => { window.location.href = "/"; });
   }
 
   function isActive(href: string): boolean {

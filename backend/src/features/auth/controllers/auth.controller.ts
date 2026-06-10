@@ -23,6 +23,27 @@ const RESET_VALIDITY = 900;
 const RESET_RESEND_COOLDOWN = 60;
 const RESET_MAX_ATTEMPTS = 5;
 
+const IS_PROD = process.env.NODE_ENV === "production";
+
+/**
+ * Set the JWT as an httpOnly cookie so the browser can't read it from JS
+ * (XSS-resistant). The token is still returned in the response body for any
+ * non-browser API client. Frontend clients should rely on the cookie.
+ */
+export function setAuthCookie(reply: any, token: string) {
+  reply.setCookie("token", token, {
+    httpOnly: true,
+    secure: IS_PROD,          // HTTPS-only in production
+    sameSite: "lax",          // sent on same-site requests (incl. localhost dev)
+    path: "/",
+    maxAge: config.jwtExpiration, // seconds
+  });
+}
+
+function clearAuthCookie(reply: any) {
+  reply.clearCookie("token", { path: "/" });
+}
+
 
 // ================= REGISTER =================
 export async function register(request, reply) {
@@ -89,6 +110,7 @@ export async function register(request, reply) {
       );
       const u = verified[0];
       const token = request.server.jwt.sign({ id: u.id, email: u.email, role: u.role });
+      setAuthCookie(reply, token);
       return reply.status(200).send({
         status: "success",
         message: "Registration successful",
@@ -206,6 +228,7 @@ export async function verifyOTP(request, reply) {
         email: user.email,
         role: user.role,
       });
+      setAuthCookie(reply, token);
 
       return reply.status(200).send({
         status: "success",
@@ -223,13 +246,11 @@ export async function verifyOTP(request, reply) {
       });
     }
 
-    // Get attempt count
-    let attempts = parseInt(
-      (await request.server.redis.get(attemptsKey)) || "0"
-    );
+    // Atomically increment before checking — prevents concurrent requests from
+    // all passing a GET-then-compare race. INCR is atomic in Redis.
+    const attempts = await request.server.redis.incr(attemptsKey);
 
-    // Block if too many attempts
-    if (attempts >= OTP_MAX_ATTEMPTS) {
+    if (attempts > OTP_MAX_ATTEMPTS) {
       return reply.status(429).send({
         error: "Too many attempts",
       });
@@ -242,9 +263,6 @@ export async function verifyOTP(request, reply) {
     );
 
     if (!isMatch) {
-      // Increment attempt counter on failure
-      await request.server.redis.incr(attemptsKey);
-
       return reply.status(400).send({
         error: "Invalid verification code",
       });
@@ -260,12 +278,19 @@ export async function verifyOTP(request, reply) {
       [formattedEmail]
     );
 
+    // Fire-and-forget welcome email — never block the response on email delivery
+    if (config.smtpHost) {
+      const mailer = createMailerService(config);
+      mailer.sendWelcomeEmail({ to: user.email, username: user.username }).catch(() => {});
+    }
+
     // Issue JWT token
     const token = request.server.jwt.sign({
       id: user.id,
       email: user.email,
       role: user.role,
     });
+    setAuthCookie(reply, token);
 
     return reply.status(200).send({
       status: "success",
@@ -360,14 +385,13 @@ export async function resetPassword(request, reply) {
       return reply.status(400).send({ error: "Reset code expired or invalid" });
     }
 
-    const attempts = parseInt((await request.server.redis.get(attemptsKey)) || "0", 10);
-    if (attempts >= RESET_MAX_ATTEMPTS) {
+    const attempts = await request.server.redis.incr(attemptsKey);
+    if (attempts > RESET_MAX_ATTEMPTS) {
       return reply.status(429).send({ error: "Too many attempts" });
     }
 
     const isMatch = await comparePasswords(otp, hashedOTP);
     if (!isMatch) {
-      await request.server.redis.incr(attemptsKey);
       return reply.status(400).send({ error: "Invalid reset code" });
     }
 
@@ -455,6 +479,7 @@ export async function login(request, reply) {
       email: user.email,
       role: user.role,
     });
+    setAuthCookie(reply, token);
 
     return reply.status(200).send({
       status: "success",
@@ -529,6 +554,7 @@ export async function registerAdmin(request, reply) {
       email: user.email,
       role:  user.role,
     });
+    setAuthCookie(reply, token);
 
     request.log.info(`[ADMIN_REGISTER] New admin account created: ${formattedEmail}`);
 
@@ -542,4 +568,11 @@ export async function registerAdmin(request, reply) {
     request.log.error(error);
     return reply.status(500).send({ status: "error", message: "Internal server error." });
   }
+}
+
+
+// ================= LOGOUT =================
+export async function logout(_request, reply) {
+  clearAuthCookie(reply);
+  return reply.status(200).send({ status: "success", message: "Logged out" });
 }
