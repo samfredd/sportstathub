@@ -83,7 +83,7 @@ ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-browser-worker:latest
 
 The workflow lowercases `YOUR_OWNER/YOUR_REPO` before publishing because container image names must be lowercase.
 
-Repository variable:
+Repository variable or secret:
 
 - `PRODUCTION_DOMAIN`: production domain without `https://`
 

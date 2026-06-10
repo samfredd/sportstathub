@@ -206,10 +206,11 @@ jobs:
         env:
           INPUT_DOMAIN: ${{ inputs.production_domain }}
           VARIABLE_DOMAIN: ${{ vars.PRODUCTION_DOMAIN }}
+          SECRET_DOMAIN: ${{ secrets.PRODUCTION_DOMAIN }}
           FALLBACK_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
           DEPLOY_REQUESTED: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy) }}
         run: |
-          DOMAIN="${INPUT_DOMAIN:-$VARIABLE_DOMAIN}"
+          DOMAIN="${INPUT_DOMAIN:-${VARIABLE_DOMAIN:-$SECRET_DOMAIN}}"
           if [ -n "$DOMAIN" ]; then
             API_URL="$DOMAIN"
             case "$API_URL" in
@@ -217,7 +218,7 @@ jobs:
               *) API_URL="https://$API_URL" ;;
             esac
           elif [ "$DEPLOY_REQUESTED" = "true" ]; then
-            echo "PRODUCTION_DOMAIN repository variable or workflow input is required when deploy=true." >&2
+            echo "PRODUCTION_DOMAIN repository variable, repository secret, or workflow input is required for production deploys." >&2
             exit 1
           else
             API_URL="$FALLBACK_API_URL"
