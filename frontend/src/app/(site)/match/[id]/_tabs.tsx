@@ -395,7 +395,9 @@ async function fetchFixtureStatsThrottled(
       try {
         const res = await fetch(`${BASE}/api/matches/${id}/stats`, withAuth());
         const json = res.ok ? await res.json() : null;
-        onResult(id, json?.data ?? null);
+        // An empty array means the competition has no stats coverage — treat it
+        // as "no data" (null) so rows render "—" instead of a misleading "0-0".
+        onResult(id, json?.data?.length ? json.data : null);
       } catch {
         onResult(id, null);
       }
@@ -587,12 +589,24 @@ function LastMatchesTab(props: LastMatchesTabProps) {
   }, [statType, filteredHome, filteredAway]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only the capped (most-recent) sample is fetched, so loading reflects that set.
+  const sampled = [...filteredHome.slice(0, STAT_FETCH_CAP), ...filteredAway.slice(0, STAT_FETCH_CAP)];
   const loadingStats = statType !== "goals" &&
-    [...filteredHome.slice(0, STAT_FETCH_CAP), ...filteredAway.slice(0, STAT_FETCH_CAP)]
-      .some(f => f.fixtureId && !(f.fixtureId in statsCache));
+    sampled.some(f => f.fixtureId && !(f.fixtureId in statsCache));
+
+  // Lower-tier competitions have no per-match stats in the data provider; once
+  // we've fetched and every fixture came back empty, say so instead of "—" rows.
+  const noStatCoverage = statType !== "goals" && !loadingStats &&
+    sampled.length > 0 && sampled.every(f => !f.fixtureId || statsCache[f.fixtureId] == null);
+  const statLabel = STAT_TYPES.find(s => s.id === statType)?.label ?? "These stats";
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
+      {noStatCoverage && (
+        <div className="lg:col-span-2 flex items-center gap-2.5 rounded-xl border border-border/50 bg-surface/60 px-4 py-3 text-[12px] text-muted">
+          <span className="text-accent text-sm shrink-0">ℹ</span>
+          <span><span className="font-bold text-foreground">{statLabel}</span> data isn&apos;t available for this competition — the provider only covers it for major leagues. Goals and form are still shown.</span>
+        </div>
+      )}
       <TeamFormPanel
         teamName={match.homeTeam}
         logo={match.homeLogo}
@@ -837,14 +851,23 @@ function H2HTab({ match, h2hStats, trend, lastN, statType }: MatchTabsProps & { 
     });
   }, [statType, played]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const sampledH2H = played.slice(0, STAT_FETCH_CAP);
   const loadingStats = statType !== "goals" &&
-    played.slice(0, STAT_FETCH_CAP).some((f: any) => f.fixture?.id && !(f.fixture.id in statsCache));
+    sampledH2H.some((f: any) => f.fixture?.id && !(f.fixture.id in statsCache));
+  const noStatCoverage = statType !== "goals" && !loadingStats &&
+    sampledH2H.length > 0 && sampledH2H.every((f: any) => !f.fixture?.id || statsCache[f.fixture.id] == null);
 
   const statLabel = STAT_TYPES.find(s => s.id === statType)?.label ?? "Stat";
   const scoreHeader = statType === "goals" ? "SCORE" : statLabel.toUpperCase().slice(0, 5);
 
   return (
     <div className="space-y-4">
+      {noStatCoverage && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-border/50 bg-surface/60 px-4 py-3 text-[12px] text-muted">
+          <span className="text-accent text-sm shrink-0">ℹ</span>
+          <span><span className="font-bold text-foreground">{statLabel}</span> data isn&apos;t available for this competition — the provider only covers it for major leagues.</span>
+        </div>
+      )}
       {/* H2H summary boxes — always goals-based (wins/draws/losses don't change) */}
       {h2hStats.total > 0 && (
         <div className="rounded-2xl bg-surface border border-border/40 overflow-hidden">

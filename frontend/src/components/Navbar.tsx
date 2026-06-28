@@ -52,7 +52,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl border-b border-border transition-all duration-300">
+    <nav className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur-xl border-b border-border transition-all duration-300">
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
         <div className="flex h-16 items-center justify-between">
 
@@ -66,7 +66,7 @@ export default function Navbar() {
                 <span className="text-foreground font-extrabold text-[16px] leading-none tracking-tight" style={{ fontFamily: "var(--font-display, inherit)" }}>
                   SportStatHub
                 </span>
-                <span className="text-[10px] text-muted font-semibold mt-1">Football Analytics</span>
+                <span className="text-[10px] text-foreground/70 font-semibold mt-1">Football Analytics</span>
               </div>
             </Link>
 
@@ -148,7 +148,7 @@ export default function Navbar() {
             {/* Mobile avatar — visible only on mobile, links to dashboard or login */}
             <Link
               href={user ? "/dashboard" : "/auth/login"}
-              className="lg:hidden ml-1 w-8 h-8 rounded-full flex items-center justify-center border transition-all
+              className="lg:hidden ml-1 w-10 h-10 rounded-full flex items-center justify-center border transition-all
                 bg-accent/10 border-accent/20 hover:border-accent/50"
               aria-label="Account"
             >

@@ -276,7 +276,7 @@ export default function DatePickerBar({
             >
               {sport.label}
               {comingSoon && (
-                <span className="px-1 py-0.5 rounded bg-muted/15 text-muted/60 text-[7px] tracking-wider">
+                <span className="px-1 py-0.5 rounded bg-muted/15 text-muted/60 text-[9px] tracking-wider">
                   SOON
                 </span>
               )}
@@ -362,7 +362,7 @@ export default function DatePickerBar({
                     : "bg-surface text-muted hover:text-foreground border-border/50 hover:border-border"
                 }`}
               >
-                <span className={`text-[8px] font-black uppercase tracking-[0.08em] leading-none mb-0.5 ${
+                <span className={`text-[9px] font-black uppercase tracking-[0.08em] leading-none mb-0.5 ${
                   isSelected ? "text-accent/80" : isToday ? "text-accent/60" : "text-muted/55"
                 }`}>
                   {getDateLabel(iso)}

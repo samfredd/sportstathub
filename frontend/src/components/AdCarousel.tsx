@@ -447,7 +447,7 @@ export default function AdCarousel({
         )}
 
         {slide.type === "ad" && (
-          <span className="absolute top-2 right-10 text-[7px] font-black text-muted/30 uppercase tracking-widest pointer-events-none z-20">Ad</span>
+          <span className="absolute top-2 right-10 text-[9px] font-black text-muted/30 uppercase tracking-widest pointer-events-none z-20">Ad</span>
         )}
       </div>
     );
@@ -497,7 +497,7 @@ export default function AdCarousel({
             {slide.icon && <div className="mb-2">{slide.icon}</div>}
             <div className="w-full">
               {slide.label && (
-                <span className={`text-[8px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30 inline-block mb-1`}>
+                <span className={`text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30 inline-block mb-1`}>
                   {slide.label}
                 </span>
               )}
@@ -516,7 +516,7 @@ export default function AdCarousel({
           </div>
         )}
         {slide.type === "ad" && (
-          <span className="absolute top-1.5 right-2.5 text-[7px] font-black text-muted/35 uppercase tracking-widest pointer-events-none">
+          <span className="absolute top-1.5 right-2.5 text-[9px] font-black text-muted/35 uppercase tracking-widest pointer-events-none">
             Ad
           </span>
         )}
@@ -548,7 +548,7 @@ export default function AdCarousel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             {slide.label && (
-              renderLabel(slide.label, `text-[8px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30`)
+              renderLabel(slide.label, `text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30`)
             )}
             {slide.eyebrow && <span className="text-[9px] text-muted font-bold truncate">{slide.eyebrow}</span>}
           </div>
@@ -581,7 +581,7 @@ export default function AdCarousel({
       )}
 
       {slide.type === "ad" && (
-        <span className="absolute top-1.5 right-2.5 text-[7px] font-black text-muted/35 uppercase tracking-widest pointer-events-none">Ad</span>
+        <span className="absolute top-1.5 right-2.5 text-[9px] font-black text-muted/35 uppercase tracking-widest pointer-events-none">Ad</span>
       )}
     </div>
   );

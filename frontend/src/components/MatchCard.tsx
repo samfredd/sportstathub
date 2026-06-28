@@ -61,7 +61,7 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
             {isLive ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-live animate-pulse-live" />
-                <span className="text-[8px] font-black text-live uppercase tracking-widest">Live</span>
+                <span className="text-[9px] font-black text-live uppercase tracking-widest">Live</span>
               </>
             ) : (
               <span className="text-[10px] font-bold text-muted tabular-nums leading-tight text-center">{match.time}</span>
@@ -90,23 +90,25 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
           {/* Away team: logo → name */}
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
             <TeamLogo name={match.awayTeam} logo={match.awayLogo} size="md" />
-            <span className="text-[12px] font-bold text-foreground truncate leading-tight group-hover:text-accent transition-colors">
+            <span className="text-[12px] font-bold text-foreground line-clamp-2 leading-tight group-hover:text-accent transition-colors">
               {match.awayTeam}
             </span>
           </div>
 
-          {/* Odds / Lock */}
-          <div className="w-10 shrink-0 flex justify-end">
-            {match.locked ? (
-              <div className="w-7 h-7 rounded-xl bg-surface border border-border/50 flex items-center justify-center">
-                <LockIcon className="w-3 h-3 text-accent-gold" />
-              </div>
-            ) : hasPrediction ? (
-              <span className="text-[10px] font-black text-accent bg-accent/10 px-2 py-1.5 rounded-xl border border-accent/20 tabular-nums">
-                {match.odds}
-              </span>
-            ) : null}
-          </div>
+          {/* Odds / Lock — only reserves space when there's something to show */}
+          {(match.locked || hasPrediction) && (
+            <div className="w-10 shrink-0 flex justify-end">
+              {match.locked ? (
+                <div className="w-7 h-7 rounded-xl bg-surface border border-border/50 flex items-center justify-center">
+                  <LockIcon className="w-3 h-3 text-accent-gold" />
+                </div>
+              ) : (
+                <span className="text-[10px] font-black text-accent bg-accent/10 px-2 py-1.5 rounded-xl border border-accent/20 tabular-nums">
+                  {match.odds}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ─── DESKTOP LAYOUT ────────────────────────────────────────── */}
@@ -169,7 +171,7 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
             ) : hasPrediction ? (
               <div className="flex items-center gap-1 group/tip">
                 <div className="flex flex-col items-end mr-1">
-                  <span className="text-[8px] font-black text-muted uppercase tracking-[0.2em] leading-none mb-1">Pick</span>
+                  <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em] leading-none mb-1">Pick</span>
                   <span className="text-[11px] text-foreground font-black whitespace-nowrap leading-none group-hover/tip:text-accent transition-colors">
                     {match.prediction}
                   </span>

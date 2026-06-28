@@ -29,7 +29,7 @@ export default function ThemeToggle({ className = "" }: { className?: string }) 
     <button
       onClick={toggle}
       aria-label="Toggle theme"
-      className={`p-2 rounded-xl text-muted hover:text-accent hover:bg-accent/10 transition-all cursor-pointer ${className}`}
+      className={`inline-flex items-center justify-center w-10 h-10 rounded-xl text-muted hover:text-accent hover:bg-accent/10 transition-all cursor-pointer ${className}`}
     >
       {isDark
         ? <MoonIcon className="w-4 h-4 transition-transform duration-300" />

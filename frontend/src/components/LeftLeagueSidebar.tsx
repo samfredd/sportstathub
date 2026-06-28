@@ -148,7 +148,7 @@ export default function LeftLeagueSidebar({
                   <SportIcon sport={id} className={`w-3.5 h-3.5 ${!comingSoon && activeSport === id ? "text-accent" : "text-muted"}`} />
                   {label}
                   {comingSoon ? (
-                    <span className="ml-auto px-1.5 py-0.5 rounded bg-muted/15 text-muted/60 text-[8px] font-black tracking-wider uppercase">
+                    <span className="ml-auto px-1.5 py-0.5 rounded bg-muted/15 text-muted/60 text-[9px] font-black tracking-wider uppercase">
                       Soon
                     </span>
                   ) : activeSport === id ? (
@@ -240,7 +240,7 @@ export default function LeftLeagueSidebar({
                             <p className={`text-[11px] font-bold leading-tight truncate ${isActive ? lc.text : "text-foreground/90"}`}>
                               {lg.name}
                             </p>
-                            <p className="text-[9px] text-muted truncate">{lg.country}</p>
+                            <p className="text-[10px] text-muted truncate">{lg.country}</p>
                           </div>
                         </div>
                         {isActive && <CheckIcon className={`w-3 h-3 shrink-0 ${lc.text}`} />}
