@@ -139,7 +139,7 @@ export default function AdminSidebar({ user, onLogout, open, onClose }: AdminSid
           </div>
           <button
             onClick={onLogout}
-            className="text-muted hover:text-danger transition-colors p-1 rounded-lg hover:bg-rose-500/10"
+            className="text-muted hover:text-danger transition-colors p-1 rounded-lg hover:bg-danger/10"
             title="Logout"
           >
             <LogoutIcon />

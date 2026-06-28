@@ -129,7 +129,7 @@ export default function DashboardOverviewPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {completionItems.map((item) => (
-                  <span key={item.label} className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${item.done ? "border-emerald-500/20 text-emerald-400 bg-emerald-500/5" : "border-border/40 text-muted/60"}`}>
+                  <span key={item.label} className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${item.done ? "border-success/20 text-success bg-success/5" : "border-border/40 text-muted/60"}`}>
                     {item.done ? "✓" : "○"} {item.label}
                   </span>
                 ))}
@@ -154,12 +154,12 @@ export default function DashboardOverviewPage() {
 
       {/* Become creator CTA */}
       {!isCreator && (
-        <div className="glass rounded-2xl p-5 border border-purple-500/20 bg-gradient-to-r from-purple-500/5 to-transparent flex items-center justify-between gap-4">
+        <div className="glass rounded-2xl p-5 border border-accent-gold/25 bg-gradient-to-r from-accent-gold-soft to-transparent flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-black text-foreground">Become a Creator</p>
             <p className="text-sm text-muted mt-0.5">Post tips, share booking codes, and earn affiliate commissions.</p>
           </div>
-          <Link href="/dashboard/creator" className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-all">
+          <Link href="/dashboard/creator" className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold border border-accent-gold/30 text-accent-gold hover:bg-accent-gold-soft transition-all">
             Learn more
           </Link>
         </div>
@@ -206,7 +206,7 @@ function StatCard({ label, value, change, accent }: { label: string; value: stri
       <p className={`text-2xl font-black tabular-nums ${accent ? "text-accent" : "text-foreground"}`}>{value}</p>
       <p className="text-[11px] text-muted mt-0.5 font-medium">{label}</p>
       {change !== undefined && (
-        <p className={`text-[10px] font-black mt-1 ${change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+        <p className={`text-[10px] font-black mt-1 ${change >= 0 ? "text-success" : "text-danger"}`}>
           {change >= 0 ? "▲" : "▼"} {Math.abs(change)}% vs last week
         </p>
       )}
@@ -271,8 +271,8 @@ function WinRateRing({ rate, predictions }: { rate: number; predictions: any[] }
         </div>
       </div>
       <div className="flex gap-2.5 text-[10px] font-black">
-        <span className="text-emerald-400">{won}W</span>
-        <span className="text-rose-400">{lost}L</span>
+        <span className="text-success">{won}W</span>
+        <span className="text-danger">{lost}L</span>
         <span className="text-accent">{open} open</span>
       </div>
     </div>
@@ -283,8 +283,8 @@ function RecentTips({ predictions }: { predictions: any[] }) {
   const recent = predictions.slice(0, 3);
   if (!recent.length) return null;
   const statusColor: Record<string, string> = {
-    won: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    lost: "text-rose-400 bg-rose-500/10 border-rose-500/20",
+    won: "text-success bg-success/10 border-success/20",
+    lost: "text-danger bg-danger/10 border-danger/20",
     open: "text-accent bg-accent/10 border-accent/20",
   };
   return (
@@ -292,7 +292,7 @@ function RecentTips({ predictions }: { predictions: any[] }) {
       <div className="space-y-2">
         {recent.map((pred: any) => (
           <div key={pred.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface/40 border border-border/20">
-            <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-emerald-400" : pred.status === "lost" ? "bg-rose-400" : "bg-accent"}`} />
+            <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-success" : pred.status === "lost" ? "bg-danger" : "bg-accent"}`} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{pred.match?.homeTeam?.name} vs {pred.match?.awayTeam?.name}</p>
               <p className="text-[10px] text-muted mt-0.5">{pred.prediction?.type} · @{pred.prediction?.odds} · {pred.prediction?.confidence}% conf</p>

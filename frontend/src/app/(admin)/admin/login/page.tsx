@@ -184,7 +184,7 @@ function AdminPanel({ headline, sub, children }: {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:28px_28px] pointer-events-none" />
       {/* Glow blobs */}
       <div className="absolute top-0 left-0 w-96 h-96 bg-accent/8 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
-      <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-500/6 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
+      <div className="absolute bottom-0 right-0 w-64 h-64 bg-accent/6 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
       {/* Right border */}
       <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white/8 to-transparent" />
 
@@ -207,7 +207,7 @@ function AdminPanel({ headline, sub, children }: {
       <div className="relative z-10 space-y-6">
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
             <span className="text-[9px] font-black text-white/50 uppercase tracking-[0.3em]">Restricted Access</span>
           </div>
           <h1 className="text-4xl xl:text-5xl font-black text-white leading-[1.05] tracking-tight">{headline}</h1>
@@ -261,7 +261,7 @@ function ToggleBtn({ show, onToggle }: { show: boolean; onToggle: () => void }) 
 
 function SessionExpiredBanner() {
   return (
-    <div className="mb-5 flex items-start gap-3 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-amber-400 text-sm font-medium">
+    <div className="mb-5 flex items-start gap-3 p-4 rounded-2xl bg-accent-gold/5 border border-accent-gold/20 text-accent-gold text-sm font-medium">
       <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
       </svg>
@@ -272,7 +272,7 @@ function SessionExpiredBanner() {
 
 function ErrorBanner({ msg }: { msg: string }) {
   return (
-    <div className="mb-5 flex items-start gap-3 p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20 text-rose-400 text-sm font-medium">
+    <div className="mb-5 flex items-start gap-3 p-4 rounded-2xl bg-danger/5 border border-danger/20 text-danger text-sm font-medium">
       <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>

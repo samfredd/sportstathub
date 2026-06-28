@@ -1,3 +1,5 @@
+name: sportstathub
+
 services:
   # 1. PostgreSQL Database
   database:

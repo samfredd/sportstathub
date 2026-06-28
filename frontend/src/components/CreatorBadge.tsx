@@ -2,8 +2,8 @@
 import Link from "next/link";
 
 const BADGE_STYLES: Record<string, string> = {
-  elite: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  pro:   "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  elite: "bg-accent-gold text-white border-accent-gold/40",
+  pro:   "bg-accent-gold/15 text-accent-gold border-accent-gold/30",
   verified: "bg-accent/15 text-accent border-accent/25",
 };
 
@@ -77,7 +77,7 @@ export default function CreatorBadge({ creator, size = "md", showStats = true, l
             {creator.stats.currentStreak > 2 && (
               <>
                 <span className="text-[10px] text-muted">·</span>
-                <span className="text-[10px] text-orange-400 font-bold">
+                <span className="text-[10px] text-accent-gold font-bold">
                   🔥 {creator.stats.currentStreak}
                 </span>
               </>

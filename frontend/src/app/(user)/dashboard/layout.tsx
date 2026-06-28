@@ -87,9 +87,9 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
 
 function RolePill({ role }: { role?: string }) {
   const styles: Record<string, string> = {
-    creator: "bg-purple-500/10 border-purple-500/20 text-purple-400",
-    admin:   "bg-amber-500/10  border-amber-500/20  text-amber-400",
-    user:    "bg-accent/10     border-accent/20      text-accent",
+    creator: "bg-accent-gold/10 border-accent-gold/20 text-accent-gold",
+    admin:   "bg-danger/10      border-danger/20      text-danger",
+    user:    "bg-accent/10      border-accent/20      text-accent",
   };
   const s = styles[role ?? "user"] ?? styles.user;
   return (

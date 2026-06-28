@@ -69,10 +69,10 @@ export const HERO_SLIDES: AdSlide[] = [
     type: "promo",
     badge: "Limited Offer",
     badgeColor: "text-accent",
-    headline: "Unlock Pro Terminal Access.",
+    headline: "Unlock Pro Access.",
     subline: "Live AI · Unlimited picks · Expert community",
     title: "Unlock unlimited picks & live insights",
-    body: "Join 50k+ analysts already on Pro Terminal",
+    body: "Join 50k+ analysts already on Pro",
     cta: { label: "Go PRO →", href: "/auth/register" },
     cta2: { label: "See what's inside", href: "/contact" },
     label: "PRO",
@@ -85,7 +85,7 @@ export const HERO_SLIDES: AdSlide[] = [
     id: "hero-creator",
     type: "feature",
     badge: "New Program",
-    badgeColor: "text-amber-400",
+    badgeColor: "text-accent-gold",
     headline: "Share Picks. Build Your Brand. Earn.",
     subline: "Verified creators earn on every prediction shared",
     title: "Become a Verified Creator",
@@ -93,8 +93,8 @@ export const HERO_SLIDES: AdSlide[] = [
     cta: { label: "Apply Now →", href: "/forum" },
     cta2: { label: "See creators", href: "/forum" },
     label: "NEW",
-    accent: "text-amber-400",
-    bg: "bg-amber-500/5",
+    accent: "text-accent-gold",
+    bg: "bg-accent-gold-soft",
     glowColor: "rgba(245,158,11,0.12)",
     glowColor2: "rgba(245,158,11,0.05)",
   },
@@ -122,7 +122,7 @@ export const SIDEBAR_SLIDES: AdSlide[] = [
     type: "promo",
     label: "PRO",
     eyebrow: "Upgrade today",
-    title: "Upgrade to Pro Terminal",
+    title: "Upgrade to Pro",
     body: "Unlimited picks · Live AI · Expert access",
     cta: { label: "Upgrade Now", href: "/auth/register" },
     bg: "bg-accent/8",
@@ -144,12 +144,12 @@ export const SIDEBAR_SLIDES: AdSlide[] = [
     title: "Head-to-Head Analyser",
     body: "Compare any two teams — last 10 meetings, form, goals.",
     cta: { label: "Try H2H", href: "/h2h" },
-    bg: "bg-purple-500/8",
-    border: "border-purple-500/25",
-    accent: "text-purple-400",
+    bg: "bg-accent-soft",
+    border: "border-accent/30",
+    accent: "text-accent",
     icon: (
-      <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent/25 flex items-center justify-center shrink-0">
+        <svg className="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="8" cy="12" r="3"/><circle cx="16" cy="12" r="3"/>
           <path d="M3 12h2M19 12h2"/>
         </svg>
@@ -164,12 +164,12 @@ export const SIDEBAR_SLIDES: AdSlide[] = [
     title: "Become a Verified Creator",
     body: "Grow your audience. Earn on every prediction shared.",
     cta: { label: "Learn More", href: "/creators" },
-    bg: "bg-amber-500/8",
-    border: "border-amber-500/25",
-    accent: "text-amber-400",
+    bg: "bg-accent-gold-soft",
+    border: "border-accent-gold/30",
+    accent: "text-accent-gold",
     icon: (
-      <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
+      <div className="w-8 h-8 rounded-lg bg-accent-gold-soft border border-accent-gold/25 flex items-center justify-center shrink-0">
+        <svg className="w-4 h-4 text-accent-gold" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
         </svg>
       </div>
@@ -183,7 +183,7 @@ export const FEED_SLIDES: AdSlide[] = [
     type: "promo",
     label: "PRO",
     title: "See win probability on every match",
-    body: "Unlock AI insights with Pro Terminal",
+    body: "Unlock AI insights with Pro",
     cta: { label: "Try Free", href: "/auth/register" },
     bg: "bg-accent/6",
     border: "border-accent/20",
@@ -203,12 +203,12 @@ export const FEED_SLIDES: AdSlide[] = [
     title: "Today's top booking codes are live",
     body: "Slip codes from 40+ verified creators",
     cta: { label: "View Codes", href: "/codes" },
-    bg: "bg-amber-500/6",
-    border: "border-amber-500/20",
-    accent: "text-amber-400",
+    bg: "bg-accent-gold-soft",
+    border: "border-accent-gold/25",
+    accent: "text-accent-gold",
     icon: (
-      <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <div className="w-8 h-8 rounded-lg bg-accent-gold-soft border border-accent-gold/25 flex items-center justify-center shrink-0">
+        <svg className="w-4 h-4 text-accent-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <line x1="12" y1="17" x2="12" y2="21"/>
         </svg>
@@ -320,18 +320,23 @@ export default function AdCarousel({
 
   // ── DOT NAV shared ────────────────────────────────────────────────────────
   const Dots = ({ centered = false }: { centered?: boolean }) => (
-    <div className={`flex items-center gap-1.5 ${centered ? "justify-center" : ""}`}>
+    <div className={`flex items-center ${centered ? "justify-center" : ""}`}>
       {slides.map((_, i) => {
         const accentBg = slide.accent?.replace("text-", "bg-") ?? "bg-accent";
         return (
+          // Visible dot stays small, but the button is a ≥24px touch target.
           <button
             key={i}
             onClick={() => { stopTimer(); setDirection(i > idx ? 1 : -1); setLeaving(true); setTimeout(() => { setIdx(i); setLeaving(false); }, 240); }}
             aria-label={`Slide ${i + 1}`}
-            className={`rounded-full transition-all duration-300 cursor-pointer ${
-              i === idx ? `h-1.5 w-5 ${accentBg}` : "h-1.5 w-1.5 bg-muted/30 hover:bg-muted/60"
-            }`}
-          />
+            className="group/dot flex items-center justify-center min-h-[28px] min-w-[24px] cursor-pointer"
+          >
+            <span
+              className={`block rounded-full transition-all duration-300 ${
+                i === idx ? `h-1.5 w-5 ${accentBg}` : "h-1.5 w-1.5 bg-muted/30 group-hover/dot:bg-muted/60"
+              }`}
+            />
+          </button>
         );
       })}
     </div>
@@ -424,20 +429,21 @@ export default function AdCarousel({
         {/* Dots — mobile/tablet */}
         <div className="lg:hidden absolute bottom-3 right-4 z-20"><Dots /></div>
 
-        {/* Prev / Next arrows */}
+        {/* Prev / Next arrows — grouped bottom-right so they never overlap the
+            headline; dot indicators handle the rest. */}
         {slides.length > 1 && (
-          <>
+          <div className="hidden sm:flex absolute bottom-3 right-4 z-20 items-center gap-1.5">
             <button onClick={() => { stopTimer(); advance(-1); }}
-              className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-background/60 backdrop-blur-sm border border-border/60 items-center justify-center text-muted hover:text-foreground hover:border-accent/40 transition-all cursor-pointer"
+              className="flex w-7 h-7 rounded-full bg-surface/70 backdrop-blur-sm border border-border/60 items-center justify-center text-muted hover:text-foreground hover:border-accent/40 transition-all cursor-pointer"
               aria-label="Previous">
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
             <button onClick={() => { stopTimer(); advance(1); }}
-              className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-background/60 backdrop-blur-sm border border-border/60 items-center justify-center text-muted hover:text-foreground hover:border-accent/40 transition-all cursor-pointer"
+              className="flex w-7 h-7 rounded-full bg-surface/70 backdrop-blur-sm border border-border/60 items-center justify-center text-muted hover:text-foreground hover:border-accent/40 transition-all cursor-pointer"
               aria-label="Next">
               <ChevronRightIcon className="w-4 h-4" />
             </button>
-          </>
+          </div>
         )}
 
         {slide.type === "ad" && (

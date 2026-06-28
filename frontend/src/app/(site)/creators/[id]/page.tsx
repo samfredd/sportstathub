@@ -6,8 +6,8 @@ import PredictionCard from "@/components/PredictionCard";
 import { communityApi } from "@/lib/communityApi";
 
 const BADGE_STYLES = {
-  elite:    { bg: "bg-purple-500/15 border-purple-500/25 text-purple-300", label: "★ Elite Creator" },
-  pro:      { bg: "bg-blue-500/15 border-blue-500/25 text-blue-300", label: "◆ Pro Creator" },
+  elite:    { bg: "bg-accent-gold text-white border-accent-gold/40", label: "★ Elite Creator" },
+  pro:      { bg: "bg-accent-gold/15 border-accent-gold/30 text-accent-gold", label: "◆ Pro Creator" },
   verified: { bg: "bg-accent/15 border-accent/25 text-accent", label: "✓ Verified Creator" },
 };
 

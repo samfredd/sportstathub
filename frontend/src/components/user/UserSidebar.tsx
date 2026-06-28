@@ -106,12 +106,12 @@ export default function UserSidebar({ user, onLogout }: UserSidebarProps) {
           <div className="flex-1 min-w-0">
             <div className="text-xs font-black text-foreground truncate">{displayName}</div>
             <div className={`text-[10px] font-bold uppercase tracking-wider ${
-              user?.role === "creator" ? "text-purple-400" : "text-accent"
+              user?.role === "creator" ? "text-accent-gold" : "text-accent"
             }`}>{user?.role || "user"}</div>
           </div>
           <button
             onClick={onLogout}
-            className="text-muted hover:text-danger transition-colors p-1 rounded-lg hover:bg-rose-500/10"
+            className="text-muted hover:text-danger transition-colors p-1 rounded-lg hover:bg-danger/10"
             title="Sign out"
           >
             <LogoutIcon />

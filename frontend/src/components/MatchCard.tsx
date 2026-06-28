@@ -25,7 +25,7 @@ function TeamLogo({ name, logo, size = "sm" }: { name: string; logo?: string; si
   return (
     <div className={`${dim} shrink-0 bg-surface flex items-center justify-center border border-border/50 overflow-hidden`}>
       {logo
-        ? <img src={logo} alt={name} className="w-full h-full object-contain p-0.5" />
+        ? <img src={logo} alt={name} loading="lazy" decoding="async" className="w-full h-full object-contain p-0.5" />
         : <span className="text-[9px] font-black text-muted leading-none">{name.slice(0, 2).toUpperCase()}</span>
       }
     </div>
@@ -41,7 +41,14 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
     : `/match/${match.id}`;
 
   return (
-    <Link href={href} className="block group cursor-pointer active:bg-surface-hover transition-colors">
+    <Link
+      href={href}
+      className="block group cursor-pointer active:bg-surface-hover transition-colors"
+      // Skip layout/paint/image decode for rows scrolled off-screen; the
+      // reserved intrinsic size keeps the scrollbar accurate. Big win on the
+      // 300+ row feed for low-end mobile.
+      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 56px" }}
+    >
       <div className="border-b border-border/30 group-last:border-none relative overflow-hidden">
         {/* Hover accent bar */}
         <div className="absolute left-0 top-0 w-[3px] h-full bg-accent scale-y-0 group-hover:scale-y-100 transition-transform origin-center duration-300" />
@@ -63,7 +70,7 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
 
           {/* Home team: name → logo */}
           <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5">
-            <span className="text-[12px] font-bold text-foreground truncate text-right leading-tight group-hover:text-accent transition-colors">
+            <span className="text-[12px] font-bold text-foreground line-clamp-2 text-right leading-tight group-hover:text-accent transition-colors">
               {match.homeTeam}
             </span>
             <TeamLogo name={match.homeTeam} logo={match.homeLogo} size="md" />
@@ -131,7 +138,7 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
             {/* Score */}
             <div className={`flex items-center justify-center shrink-0 ${isWideScore ? "w-[82px]" : "w-16"}`}>
               {match.score ? (
-                <span className={`w-full text-center whitespace-nowrap font-black text-white bg-accent/20 px-2 py-0.5 rounded border border-accent/30 tabular-nums shadow-[0_0_10px_rgba(59,130,246,0.1)] ${isWideScore ? "text-[13px]" : "text-[15px]"}`}>
+                <span className={`w-full text-center whitespace-nowrap font-black text-foreground bg-accent/15 px-2 py-0.5 rounded border border-accent/30 tabular-nums ${isWideScore ? "text-[13px]" : "text-[15px]"}`}>
                   {match.score}
                 </span>
               ) : (
@@ -172,9 +179,7 @@ export default function MatchCard({ match, sport }: MatchCardProps) {
                   {match.odds}
                 </span>
               </div>
-            ) : (
-              <span className="text-[9px] font-black text-muted/40 tracking-widest">NO TIP</span>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

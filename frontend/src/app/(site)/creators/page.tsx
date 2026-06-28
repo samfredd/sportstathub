@@ -8,8 +8,8 @@ import { TrendingUpIcon, ArrowRightIcon, CrownIcon } from "@/components/Icons";
 import PremiumGate from "@/components/PremiumGate";
 
 const BADGE_STYLES = {
-  elite:    "bg-purple-500/15 border-purple-500/25 text-purple-300",
-  pro:      "bg-blue-500/15 border-blue-500/25 text-blue-300",
+  elite:    "bg-accent-gold text-white border-accent-gold/40",
+  pro:      "bg-accent-gold/15 border-accent-gold/30 text-accent-gold",
   verified: "bg-accent/15 border-accent/25 text-accent",
 };
 

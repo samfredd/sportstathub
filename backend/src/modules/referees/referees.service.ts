@@ -1,10 +1,6 @@
 export function createRefereesService({ footballService }) {
   async function getRefereeStats({ name, leagueId, season }) {
-    const fixtures = await footballService.getRefereeFixtures(
-      name,
-      leagueId,
-      season || String(new Date().getFullYear())
-    );
+    const fixtures = await footballService.getRefereeFixtures(name, leagueId, season);
 
     const stats = fixtures.reduce(
       (acc, f) => {

@@ -79,7 +79,7 @@ export default function ProfilePage() {
                   }
                 </div>
                 {profile?.is_verified && (
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-success border-2 border-background flex items-center justify-center">
                     <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                 )}
@@ -138,14 +138,14 @@ export default function ProfilePage() {
                   <>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-2xl font-black text-foreground">{pct}%</span>
-                      {pct === 100 && <span className="text-[11px] font-black text-emerald-400">Complete ✓</span>}
+                      {pct === 100 && <span className="text-[11px] font-black text-success">Complete ✓</span>}
                     </div>
                     <div className="w-full h-2 bg-surface rounded-full overflow-hidden mb-4">
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: "var(--accent-gradient)" }} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {items.map((item) => (
-                        <div key={item.label} className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border ${item.done ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/20" : "text-muted/60 border-border/30"}`}>
+                        <div key={item.label} className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border ${item.done ? "text-success bg-success/5 border-success/20" : "text-muted/60 border-border/30"}`}>
                           <span>{item.done ? "✓" : "○"}</span> {item.label}
                         </div>
                       ))}
@@ -218,7 +218,7 @@ export default function ProfilePage() {
       </div>
 
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold ${toast.ok ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold ${toast.ok ? "bg-success" : "bg-danger"} text-white`}>
           {toast.msg}
         </div>
       )}
@@ -229,7 +229,7 @@ export default function ProfilePage() {
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
     admin:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    creator: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    creator: "bg-accent-gold/10 text-accent-gold border-accent-gold/20",
     user:    "bg-surface text-muted border-border/40",
   };
   return (

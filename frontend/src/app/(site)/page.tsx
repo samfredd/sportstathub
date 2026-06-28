@@ -49,9 +49,11 @@ function compactNumber(value) {
 }
 
 function buildPlatformStats(stats) {
+  // Until the live stats arrive, show a neutral placeholder rather than a
+  // flash of zeros that then jumps to real values.
   return DEFAULT_PLATFORM_STATS.map(({ suffix, ...item }) => ({
     ...item,
-    value: `${compactNumber(stats?.[item.key] ?? 0)}${suffix ?? ""}`,
+    value: stats ? `${compactNumber(stats[item.key] ?? 0)}${suffix ?? ""}` : "—",
   }));
 }
 
@@ -283,9 +285,9 @@ export default function Home() {
         <div className="grid grid-cols-4 gap-2.5">
           {[
             { href: "/predictions", label: "Tips",     bg: "bg-accent/10    border-accent/20",    icon: <svg className="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> },
-            { href: "/codes",       label: "Codes",    bg: "bg-amber-500/10 border-amber-500/20", icon: <svg className="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" fill="currentColor" fillOpacity=".15"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
+            { href: "/codes",       label: "Codes",    bg: "bg-accent-gold-soft border-accent-gold/20", icon: <svg className="w-5 h-5 text-accent-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" fill="currentColor" fillOpacity=".15"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
             { href: "/rankings",   label: "Table",    bg: "bg-accent/10    border-accent/20",    icon: <svg className="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg> },
-            { href: "/h2h",        label: "H2H",      bg: "bg-purple-500/10 border-purple-500/20", icon: <svg className="w-5 h-5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="12" r="3" fill="currentColor" fillOpacity=".25"/><circle cx="16" cy="12" r="3" fill="currentColor" fillOpacity=".25"/><path d="M3 12h2M19 12h2"/></svg> },
+            { href: "/h2h",        label: "H2H",      bg: "bg-accent/10 border-accent/20", icon: <svg className="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="12" r="3" fill="currentColor" fillOpacity=".25"/><circle cx="16" cy="12" r="3" fill="currentColor" fillOpacity=".25"/><path d="M3 12h2M19 12h2"/></svg> },
           ].map(({ href, label, bg, icon }) => (
             <Link
               key={href}

@@ -170,7 +170,7 @@ export default function AdminPredictionsPage() {
         return (
           <div className="max-w-[200px]">
             <div className="text-sm font-bold text-foreground">{p.tip ?? "—"}</div>
-            {p.odds && <div className="text-xs text-amber-400 font-black">@ {p.odds}x</div>}
+            {p.odds && <div className="text-xs text-accent-gold font-black">@ {p.odds}x</div>}
             {p.confidence && (
               <div className="text-[10px] text-muted capitalize">{CONFIDENCE_LABELS[p.confidence] ?? p.confidence} confidence</div>
             )}
@@ -214,7 +214,7 @@ export default function AdminPredictionsPage() {
             Status
           </button>
           <button onClick={() => handleDelete(row)}
-            className="text-xs font-bold text-rose-400 hover:underline px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all">
+            className="text-xs font-bold text-danger hover:underline px-2 py-1 rounded-lg hover:bg-danger/10 transition-all">
             Delete
           </button>
         </div>
@@ -461,10 +461,10 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 // ─── Sub-components ─────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    open: "text-sky-400 bg-sky-500/10",
-    won:  "text-emerald-400 bg-emerald-500/10",
-    lost: "text-rose-400 bg-rose-500/10",
-    void: "text-amber-400 bg-amber-500/10",
+    open: "text-accent bg-accent/10",
+    won:  "text-success bg-success/10",
+    lost: "text-danger bg-danger/10",
+    void: "text-accent-gold bg-accent-gold/10",
   };
   return (
     <span className={`text-[11px] font-black px-2.5 py-1 rounded-full capitalize ${styles[status] ?? "text-muted bg-surface"}`}>
@@ -493,7 +493,7 @@ function Modal({ title, onClose, children, wide = false }: any) {
 function Toast({ msg, type }: { msg: string; type: string }) {
   return (
     <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold ${
-      type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
+      type === "error" ? "bg-danger text-white" : "bg-success text-white"
     }`}>
       {msg}
     </div>

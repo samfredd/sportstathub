@@ -158,7 +158,7 @@ export default function SubscriptionPage() {
               <div className="grid grid-cols-2 gap-2">
                 {currentFeatures.map((f) => (
                   <div key={f} className="flex items-center gap-2 text-sm">
-                    <span className="text-emerald-400 shrink-0">✓</span>
+                    <span className="text-success shrink-0">✓</span>
                     <span className="text-foreground font-medium">{f}</span>
                   </div>
                 ))}
@@ -227,7 +227,7 @@ export default function SubscriptionPage() {
                       <ul className="space-y-1.5 mb-5">
                         {features.slice(0, 5).map((f) => (
                           <li key={f} className="flex items-center gap-2 text-sm text-foreground font-medium">
-                            <span className="text-emerald-400 shrink-0">✓</span> {f}
+                            <span className="text-success shrink-0">✓</span> {f}
                           </li>
                         ))}
                         {features.length > 5 && (
@@ -282,7 +282,7 @@ export default function SubscriptionPage() {
 
 function PlanBadge({ plan, large = false }: { plan: string; large?: boolean }) {
   const styles: Record<string, string> = {
-    enterprise: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    enterprise: "bg-success/10 text-success border-success/20",
     pro:        "bg-accent/10 text-accent border-accent/20",
     free:       "bg-surface text-muted/60 border-border/30",
   };

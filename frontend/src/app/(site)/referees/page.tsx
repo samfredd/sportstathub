@@ -6,12 +6,12 @@ import PremiumGate from "@/components/PremiumGate";
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 const POPULAR = [
-  { name: "Michael Oliver",     league: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-  { name: "Anthony Taylor",     league: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-  { name: "Jesus Gil Manzano",  league: "La Liga",        flag: "🇪🇸" },
-  { name: "Daniele Orsato",     league: "Serie A",        flag: "🇮🇹" },
-  { name: "Felix Zwayer",       league: "Bundesliga",     flag: "🇩🇪" },
-  { name: "Clement Turpin",     league: "Ligue 1",        flag: "🇫🇷" },
+  { name: "Michael Oliver",     league: "Premier League", leagueId: 39,  flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { name: "Anthony Taylor",     league: "Premier League", leagueId: 39,  flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { name: "Jesus Gil Manzano",  league: "La Liga",        leagueId: 140, flag: "🇪🇸" },
+  { name: "Davide Massa",       league: "Serie A",        leagueId: 135, flag: "🇮🇹" },
+  { name: "Felix Zwayer",       league: "Bundesliga",     leagueId: 78,  flag: "🇩🇪" },
+  { name: "Clement Turpin",     league: "Ligue 1",        leagueId: 61,  flag: "🇫🇷" },
 ];
 
 export default function RefereesPage() {
@@ -21,7 +21,7 @@ export default function RefereesPage() {
   const [error, setError]   = useState(null);
   const [searched, setSearched] = useState("");
 
-  async function doSearch(name) {
+  async function doSearch(name, leagueId?) {
     const trimmed = name.trim();
     if (!trimmed) return;
     setLoading(true);
@@ -29,10 +29,16 @@ export default function RefereesPage() {
     setResult(null);
     setSearched(trimmed);
     try {
-      const res = await fetch(`${BASE}/api/referees?name=${encodeURIComponent(trimmed)}`);
+      const params = new URLSearchParams({ name: trimmed });
+      if (leagueId) params.set("league", String(leagueId));
+      const res = await fetch(`${BASE}/api/referees?${params.toString()}`);
       if (!res.ok) throw new Error();
       const { data } = await res.json();
-      setResult(data);
+      if (!data?.stats?.matches) {
+        setError("No data found. Try a different name.");
+      } else {
+        setResult(data);
+      }
     } catch {
       setError("No data found. Try a different name.");
     } finally {
@@ -44,7 +50,7 @@ export default function RefereesPage() {
     <div className="px-4 lg:px-6 py-12 font-sans space-y-8">
 
         {/* Hero */}
-        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 p-10 md:p-14">
+        <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-800 p-10 md:p-14">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.12),transparent_60%)]" />
           <div className="absolute -top-16 -right-16 w-64 h-64 bg-accent/5 rounded-full" />
           <div className="relative z-10">
@@ -180,7 +186,7 @@ export default function RefereesPage() {
                 <button
                   key={ref.name}
                   type="button"
-                  onClick={() => { setQuery(ref.name); doSearch(ref.name); }}
+                  onClick={() => { setQuery(ref.name); doSearch(ref.name, ref.leagueId); }}
                   className="group glass border border-border/30 rounded-2xl p-5 hover:border-accent/40 hover:bg-surface-hover/40 transition-all duration-200 flex items-center gap-4 text-left"
                 >
                   <div className="w-11 h-11 rounded-xl bg-surface border border-border/40 flex items-center justify-center text-xl shrink-0 group-hover:bg-accent/10 group-hover:border-accent/30 transition-all">
@@ -205,8 +211,8 @@ function StatCard({ label, value, color }) {
   const colors = {
     accent:  "text-accent  bg-accent/10  border-accent/20",
     success: "text-success bg-success/10 border-success/20",
-    blue:    "text-blue-400 bg-blue-500/10 border-blue-500/20",
-    purple:  "text-purple-400 bg-purple-500/10 border-purple-500/20",
+    blue:    "text-accent bg-accent/10 border-accent/20",
+    purple:  "text-accent-gold bg-accent-gold-soft border-accent-gold/25",
   };
   return (
     <div className={`glass border rounded-2xl p-5 ${colors[color] ?? colors.accent}`}>

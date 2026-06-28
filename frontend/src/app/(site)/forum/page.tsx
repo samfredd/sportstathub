@@ -7,8 +7,8 @@ import NewThreadModal from "@/components/forum/NewThreadModal";
 import { communityApi } from "@/lib/communityApi";
 
 const BADGE_STYLES = {
-  elite: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
-  pro: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+  elite: "bg-accent-gold text-white border border-accent-gold/40",
+  pro: "bg-accent-gold/15 text-accent-gold border border-accent-gold/30",
   verified: "bg-accent/20 text-accent border border-accent/30",
 };
 
@@ -305,7 +305,7 @@ function CreatorOfWeek({ creator }) {
         </div>
       </div>
       <div className="w-full bg-border/30 rounded-full h-1.5 mb-4 relative z-10 overflow-hidden">
-        <div className="h-full rounded-full bg-gradient-to-r from-accent-gold to-yellow-400" style={{ width: `${creator.stats.winRate}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-accent-gold to-accent" style={{ width: `${creator.stats.winRate}%` }} />
       </div>
       <Link href={`/creators/${creator.id}`} className="btn-gold w-full flex items-center justify-center text-[11px] py-2 relative z-10">
         View Profile →

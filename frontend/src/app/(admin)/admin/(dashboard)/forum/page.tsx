@@ -198,7 +198,7 @@ function ThreadList({
       render: (row: Thread) => (
         <div className="flex flex-col items-center gap-0.5">
           <span className="text-muted text-xs font-mono">#{row.id}</span>
-          {row.is_pinned && <PinIcon className="w-3 h-3 text-amber-400" />}
+          {row.is_pinned && <PinIcon className="w-3 h-3 text-accent-gold" />}
         </div>
       ),
     },
@@ -251,14 +251,14 @@ function ThreadList({
           </button>
           <button
             onClick={() => handleTogglePin(row)}
-            className={`text-xs font-bold px-2 py-1 rounded-lg transition-all ${row.is_pinned ? "text-amber-400 hover:bg-amber-500/10" : "text-muted hover:text-amber-400 hover:bg-amber-500/10"}`}
+            className={`text-xs font-bold px-2 py-1 rounded-lg transition-all ${row.is_pinned ? "text-accent-gold hover:bg-accent-gold/10" : "text-muted hover:text-accent-gold hover:bg-accent-gold/10"}`}
             title={row.is_pinned ? "Unpin" : "Pin"}
           >
             {row.is_pinned ? "Unpin" : "Pin"}
           </button>
           <button
             onClick={() => handleDelete(row)}
-            className="text-xs font-bold text-rose-400 hover:underline px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all"
+            className="text-xs font-bold text-danger hover:underline px-2 py-1 rounded-lg hover:bg-danger/10 transition-all"
           >
             Delete
           </button>
@@ -295,7 +295,7 @@ function ThreadList({
           <span className="font-black text-foreground">{selected.size} threads selected</span>
           <button
             onClick={handleBulkDelete}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-danger bg-danger/10 hover:bg-danger/20 transition-all"
           >
             Delete Selected
           </button>
@@ -434,7 +434,7 @@ function ThreadDetail({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               {thread.is_pinned && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-[10px] font-black text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded-full">
                   <PinIcon className="w-2.5 h-2.5" /> Pinned
                 </span>
               )}
@@ -448,8 +448,8 @@ function ThreadDetail({
               disabled={pinning}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                 thread.is_pinned
-                  ? "text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-                  : "text-muted border-border/40 hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/10"
+                  ? "text-accent-gold border-accent-gold/30 hover:bg-accent-gold/10"
+                  : "text-muted border-border/40 hover:text-accent-gold hover:border-accent-gold/30 hover:bg-accent-gold/10"
               }`}
             >
               <PinIcon className="w-3.5 h-3.5" />
@@ -458,7 +458,7 @@ function ThreadDetail({
             <button
               onClick={handleDeleteThread}
               disabled={deletingThread}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-400 border border-rose-500/20 hover:bg-rose-500/10 transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-danger border border-danger/20 hover:bg-danger/10 transition-all disabled:opacity-50"
             >
               <TrashIcon className="w-3.5 h-3.5" />
               Delete Thread
@@ -514,7 +514,7 @@ function ThreadDetail({
             <span className="font-black text-foreground">{selectedComments.size} selected</span>
             <button
               onClick={handleBulkDeleteComments}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-danger bg-danger/10 hover:bg-danger/20 transition-all"
             >
               Delete Selected
             </button>
@@ -627,7 +627,7 @@ function CommentRow({
             <button
               onClick={onDelete}
               disabled={isDeleting}
-              className="text-xs font-bold text-rose-400 hover:underline px-2 py-0.5 rounded-lg hover:bg-rose-500/10 transition-all disabled:opacity-50"
+              className="text-xs font-bold text-danger hover:underline px-2 py-0.5 rounded-lg hover:bg-danger/10 transition-all disabled:opacity-50"
             >
               {isDeleting ? "…" : "Delete"}
             </button>
@@ -642,18 +642,18 @@ function CommentRow({
 // ─── Sub-components ─────────────────────────────────────────
 function CategoryBadge({ category }: { category: string }) {
   const colorMap: Record<string, string> = {
-    general:     "text-sky-400 bg-sky-500/10",
+    general:     "text-accent bg-accent/10",
     predictions: "text-accent bg-accent/10",
-    analysis:    "text-purple-400 bg-purple-500/10",
-    tips:        "text-emerald-400 bg-emerald-500/10",
-    news:        "text-amber-400 bg-amber-500/10",
+    analysis:    "text-accent bg-accent/10",
+    tips:        "text-success bg-success/10",
+    news:        "text-accent-gold bg-accent-gold/10",
   };
   return <span className={`text-[11px] font-black px-2.5 py-1 rounded-full capitalize ${colorMap[category?.toLowerCase()] ?? "text-muted bg-surface"}`}>{category}</span>;
 }
 
 function Toast({ msg, type }: { msg: string; type: string }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"}`}>
+    <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-danger text-white" : "bg-success text-white"}`}>
       {msg}
     </div>
   );

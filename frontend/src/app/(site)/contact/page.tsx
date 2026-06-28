@@ -128,7 +128,7 @@ export default function ContactPage() {
 
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${
-          toast.type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
+          toast.type === "error" ? "bg-danger text-white" : "bg-accent text-white"
         }`}>
           {toast.msg}
         </div>

@@ -15,7 +15,7 @@ interface FeatureFlag {
 }
 
 const PLAN_OPTIONS: { value: FeatureFlag["required_plan"]; label: string; color: string }[] = [
-  { value: "free", label: "Free", color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30" },
+  { value: "free", label: "Free", color: "text-success bg-success/10 border-success/30" },
   { value: "pro",  label: "Pro",  color: "text-accent bg-accent/10 border-accent/30" },
 ];
 
@@ -118,12 +118,12 @@ export default function FeatureFlagsPage() {
 
       {/* Toast messages */}
       {success && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm font-bold">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success/10 border border-success/30 text-success text-sm font-bold">
           <CheckIcon /> {success}
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-sm font-bold">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-danger/10 border border-danger/30 text-danger text-sm font-bold">
           <XIcon /> {error}
         </div>
       )}

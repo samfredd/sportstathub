@@ -8,12 +8,16 @@ interface StatCardProps {
 }
 
 export default function StatCard({ icon, label, value, sub, trend, color = 'accent' }: StatCardProps) {
+  // On-brand palette only: emerald (default/info), gold (premium-ish), red (alerts).
+  const emerald = { bg: 'bg-accent-soft',      text: 'text-accent',      border: 'border-accent/20' };
+  const gold    = { bg: 'bg-accent-gold-soft', text: 'text-accent-gold', border: 'border-accent-gold/25' };
+  const red     = { bg: 'bg-danger/10',        text: 'text-danger',      border: 'border-danger/20' };
   const colors: Record<string, { bg: string; text: string; border: string }> = {
-    accent:   { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
-    blue:     { bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/20' },
-    purple:   { bg: 'bg-purple-500/10',  text: 'text-purple-400',  border: 'border-purple-500/20' },
-    amber:    { bg: 'bg-amber-500/10',   text: 'text-amber-400',   border: 'border-amber-500/20' },
-    rose:     { bg: 'bg-rose-500/10',    text: 'text-rose-400',    border: 'border-rose-500/20' },
+    accent: emerald,
+    blue:   emerald,
+    purple: gold,
+    amber:  gold,
+    rose:   red,
   };
   const c = colors[color] || colors.accent;
 
@@ -24,7 +28,7 @@ export default function StatCard({ icon, label, value, sub, trend, color = 'acce
           {icon}
         </div>
         {trend !== undefined && (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-full ${trend >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-full ${trend >= 0 ? 'bg-accent-soft text-accent' : 'bg-danger/10 text-danger'}`}>
             {trend >= 0 ? '▲' : '▼'} {Math.abs(trend)}%
           </span>
         )}

@@ -28,10 +28,10 @@ function hitRate(won: number, lost: number): number {
 function HitBadge({ rate }: { rate: number }) {
   const color =
     rate > 70
-      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+      ? "bg-success/10 text-success border-success/20"
       : rate > 50
-      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-      : "bg-rose-500/10 text-rose-400 border-rose-500/20";
+      ? "bg-accent-gold/10 text-accent-gold border-accent-gold/20"
+      : "bg-danger/10 text-danger border-danger/20";
   return (
     <span className={`text-[11px] font-black px-2 py-0.5 rounded-full border ${color}`}>
       {rate}%
@@ -41,9 +41,9 @@ function HitBadge({ rate }: { rate: number }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    active:    "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    suspended: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    banned:    "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    active:    "bg-success/10 text-success border-success/20",
+    suspended: "bg-accent-gold/10 text-accent-gold border-accent-gold/20",
+    banned:    "bg-danger/10 text-danger border-danger/20",
   };
   const cls = map[status] ?? "bg-surface text-muted border-border/30";
   return (
@@ -132,7 +132,7 @@ export default function CreatorsPage() {
 
       {/* Error */}
       {error && (
-        <div className="glass border border-rose-500/20 rounded-2xl p-5 text-rose-400 text-sm font-medium">
+        <div className="glass border border-danger/20 rounded-2xl p-5 text-danger text-sm font-medium">
           &#9888; Failed to load creators: {error}
         </div>
       )}
@@ -223,9 +223,9 @@ export default function CreatorsPage() {
 
                       {/* Won / Lost */}
                       <td className="px-5 py-4 text-center text-[13px] font-black">
-                        <span className="text-emerald-400">{c.won}W</span>
+                        <span className="text-success">{c.won}W</span>
                         <span className="text-muted mx-1">/</span>
-                        <span className="text-rose-400">{c.lost}L</span>
+                        <span className="text-danger">{c.lost}L</span>
                       </td>
 
                       {/* Hit Rate */}

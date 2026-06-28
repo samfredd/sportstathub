@@ -410,8 +410,67 @@ export function createFootballService({ apiKey, sportsApiKey, redis }: any) {
     return [];
   }
 
-  function getRefereeFixtures(refereeName, leagueId, season) {
-    return apiFetch('/fixtures', { referee: refereeName, league: leagueId, season });
+  // API-Football's /fixtures endpoint has no "referee" parameter, so we cannot
+  // query by referee directly. Instead we pull a league+season's fixtures (each
+  // carries a `fixture.referee` field, formatted like "M. Oliver") and filter
+  // them ourselves, matching on the full name or, since the API abbreviates the
+  // first name, the surname.
+  function refereeMatches(refString, needle, lastName) {
+    const r = String(refString).toLowerCase();
+    return r.includes(needle) || (lastName.length > 2 && r.includes(lastName));
+  }
+
+  async function getRefereeFixtures(refereeName, leagueId, season) {
+    const needle = String(refereeName || '').trim().toLowerCase();
+    if (!needle) return [];
+    const lastName = needle.split(/\s+/).pop();
+
+    // With no specific league, scan the top-5 European leagues.
+    const leagues = leagueId ? [leagueId] : [39, 140, 135, 78, 61];
+    // API "season" is the campaign's starting year; before July the current
+    // campaign is last year's. Try the most recent finished season, then prior.
+    const now = new Date();
+    const baseSeason = season
+      ? Number(season)
+      : (now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1);
+    // Walk back a few campaigns so a referee who's been inactive recently (e.g.
+    // retired last season) still resolves to their most recent matches.
+    const seasons = season
+      ? [baseSeason]
+      : [baseSeason, baseSeason - 1, baseSeason - 2];
+
+    const seen = new Set();
+    const matched = [];
+
+    for (const lg of leagues) {
+      for (const sn of seasons) {
+        let fixtures;
+        try {
+          fixtures = await apiFetch('/fixtures', { league: lg, season: sn }, DEFAULT_TTL.referees);
+        } catch {
+          continue; // skip this league/season on upstream failure
+        }
+        if (!Array.isArray(fixtures) || fixtures.length === 0) continue;
+        let foundThisSeason = false;
+        for (const f of fixtures) {
+          const ref = f.fixture?.referee;
+          if (ref && refereeMatches(ref, needle, lastName) && !seen.has(f.fixture.id)) {
+            seen.add(f.fixture.id);
+            matched.push(f);
+            foundThisSeason = true;
+          }
+        }
+        // Found this referee in this league — no need to scan the older season.
+        // Otherwise fall through and try the prior season (e.g. a referee who
+        // retired and isn't in the most recent campaign).
+        if (foundThisSeason) break;
+      }
+    }
+
+    matched.sort(
+      (a, b) => new Date(b.fixture.date).getTime() - new Date(a.fixture.date).getTime()
+    );
+    return matched;
   }
 
   function searchTeams(name, sport = 'football') {

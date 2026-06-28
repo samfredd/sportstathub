@@ -184,6 +184,19 @@ function findTeamPos(standings: any[], teamId: number): number | null {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const matchJson = await fetchJson(`${BASE}/api/matches/${id}`);
+  const match = matchJson?.data ? fixtureToMatch(matchJson.data) : null;
+  if (!match) return { title: "Match — SportStatHub" };
+
+  const title = `${match.homeTeam} vs ${match.awayTeam} — SportStatHub`;
+  return {
+    title,
+    description: `${match.homeTeam} vs ${match.awayTeam}${match.league ? ` · ${match.league}` : ""} — live score, stats, head-to-head and standings.`,
+  };
+}
+
 export default async function MatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 

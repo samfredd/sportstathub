@@ -56,13 +56,13 @@ export default function Footer() {
               </div>
               <div className="flex flex-col justify-center">
                 <span
-                  className="text-foreground font-black text-base leading-none tracking-tight"
+                  className="text-foreground font-extrabold text-base leading-none tracking-tight"
                   style={{ fontFamily: "var(--font-display, inherit)" }}
                 >
-                  SPORTSTATHUB
+                  SportStatHub
                 </span>
-                <span className="text-[9px] text-accent font-black uppercase tracking-[0.3em] mt-0.5">
-                  Pro Terminal
+                <span className="text-[10px] text-muted font-semibold mt-1">
+                  Football Analytics
                 </span>
               </div>
             </Link>

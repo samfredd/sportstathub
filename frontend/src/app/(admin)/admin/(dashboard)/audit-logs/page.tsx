@@ -6,14 +6,14 @@ import { adminApi } from "@/lib/adminApi";
 const LIMIT = 50;
 
 const ACTION_COLORS = {
-  "user.updated":            "text-blue-400 bg-blue-500/10",
-  "user.deleted":            "text-rose-400 bg-rose-500/10",
-  "code.created":            "text-emerald-400 bg-emerald-500/10",
-  "code.updated":            "text-blue-400 bg-blue-500/10",
-  "code.deleted":            "text-rose-400 bg-rose-500/10",
-  "subscription.created":   "text-purple-400 bg-purple-500/10",
-  "subscription.updated":   "text-blue-400 bg-blue-500/10",
-  "subscription.deleted":   "text-rose-400 bg-rose-500/10",
+  "user.updated":            "text-accent bg-accent/10",
+  "user.deleted":            "text-danger bg-danger/10",
+  "code.created":            "text-success bg-success/10",
+  "code.updated":            "text-accent bg-accent/10",
+  "code.deleted":            "text-danger bg-danger/10",
+  "subscription.created":   "text-accent bg-accent/10",
+  "subscription.updated":   "text-accent bg-accent/10",
+  "subscription.deleted":   "text-danger bg-danger/10",
 };
 
 export default function AdminAuditLogsPage() {
@@ -165,7 +165,7 @@ export default function AdminAuditLogsPage() {
       </div>
 
       {error && (
-        <div className="glass border border-rose-500/20 rounded-2xl p-5 text-rose-400 text-sm font-medium">
+        <div className="glass border border-danger/20 rounded-2xl p-5 text-danger text-sm font-medium">
           Failed to load audit logs: {error}
         </div>
       )}

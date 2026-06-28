@@ -13,7 +13,7 @@ import { communityApi } from "@/lib/communityApi";
 
 const FORM_COLORS = {
   W: "bg-success/20 text-success",
-  D: "bg-yellow-500/20 text-yellow-400",
+  D: "bg-accent-gold/20 text-accent-gold",
   L: "bg-danger/20 text-danger",
 };
 
@@ -443,7 +443,7 @@ function TeamBlock({ team, align }) {
         <div className="flex items-center gap-0.5">
           {team.form.map((r, i) => (
             <span key={i} className={`w-5 h-5 rounded text-[9px] font-black flex items-center justify-center ${
-              r === "W" ? "bg-success/20 text-success" : r === "L" ? "bg-danger/20 text-danger" : "bg-yellow-500/20 text-yellow-400"
+              r === "W" ? "bg-success/20 text-success" : r === "L" ? "bg-danger/20 text-danger" : "bg-accent-gold/20 text-accent-gold"
             }`}>
               {r}
             </span>
@@ -455,7 +455,7 @@ function TeamBlock({ team, align }) {
 }
 
 function ConfidenceBar({ value }) {
-  const color = value >= 75 ? "bg-success" : value >= 55 ? "bg-yellow-500" : "bg-danger";
+  const color = value >= 75 ? "bg-success" : value >= 55 ? "bg-accent-gold" : "bg-danger";
   return (
     <div className="flex items-center gap-1.5">
       <div className="w-20 h-1.5 bg-border rounded-full overflow-hidden">

@@ -48,8 +48,13 @@ function NewsCard({ item, featured = false }: { item: NewsItem; featured?: boole
         className="relative rounded-2xl overflow-hidden border border-border/50 hover:border-accent/40 transition-all group block"
       >
         {item.imageUrl ? (
-          <div className="relative h-48 sm:h-56">
-            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+          <div className="relative h-48 sm:h-56 bg-surface">
+            <img
+              src={item.imageUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
           </div>
         ) : (

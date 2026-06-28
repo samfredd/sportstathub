@@ -1,12 +1,9 @@
+import { isAuthed } from "./session";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const CACHE_PREFIX = "sportstathub:api:";
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
-
-function token(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage?.getItem("token");
-}
 
 function query(params: QueryParams = {}): string {
   const q = new URLSearchParams();
@@ -18,13 +15,11 @@ function query(params: QueryParams = {}): string {
 }
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const authToken = token();
   const res = await fetch(`${BASE}${path}`, {
     ...options,
-    credentials: "include", // send the httpOnly auth cookie
+    credentials: "include", // auth travels in the httpOnly cookie, sent automatically
     headers: {
       "Content-Type": "application/json",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers as Record<string, string> || {}),
     },
   });
@@ -37,7 +32,7 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
 }
 
 function cacheKey(path: string): string {
-  const authScope = token() ? "auth" : "anon";
+  const authScope = isAuthed() ? "auth" : "anon";
   return `${CACHE_PREFIX}${authScope}:${path}`;
 }
 
@@ -106,7 +101,7 @@ export const communityApi = {
   getCreators: () => cachedApiFetch("/api/creators", 5 * 60_000),
   getCreator: (id: string | number) => apiFetch(`/api/creators/${id}`),
   getLeaderboard: () => cachedApiFetch("/api/creators/leaderboard", 5 * 60_000),
-  getPlatformStats: () => apiFetch("/api/platform/stats"),
+  getPlatformStats: () => cachedApiFetch("/api/platform/stats", 60_000),
   getCreatorDashboard: () => apiFetch("/api/dashboard/creator"),
   getUserDashboard: () => apiFetch("/api/dashboard/me"),
 

@@ -77,7 +77,7 @@ function FunnelCard({ funnel }: { funnel: FunnelData }) {
         </div>
         <div>
           <div className="text-[10px] font-black text-muted uppercase tracking-wider mb-1">Pro Users</div>
-          <div className="text-lg sm:text-xl font-black text-purple-400">{Number(funnel.pro).toLocaleString()}</div>
+          <div className="text-lg sm:text-xl font-black text-accent">{Number(funnel.pro).toLocaleString()}</div>
         </div>
         <div>
           <div className="text-[10px] font-black text-muted uppercase tracking-wider mb-1">Free Users</div>
@@ -95,7 +95,7 @@ function FunnelCard({ funnel }: { funnel: FunnelData }) {
         </div>
         <div className="h-2.5 rounded-full bg-surface overflow-hidden flex">
           <div className="h-full bg-muted/30 transition-all" style={{ width: `${freePercent}%` }} />
-          <div className="h-full bg-purple-500 transition-all" style={{ width: `${proPercent}%` }} />
+          <div className="h-full bg-accent transition-all" style={{ width: `${proPercent}%` }} />
         </div>
       </div>
     </div>
@@ -274,10 +274,10 @@ export default function AdminDashboard() {
               const home  = match.home_team ?? match.homeTeam ?? "—";
               const away  = match.away_team ?? match.awayTeam ?? "—";
               const statusColors: Record<string, string> = {
-                open: "bg-sky-500/10 text-sky-400",
-                won:  "bg-emerald-500/10 text-emerald-400",
-                lost: "bg-rose-500/10 text-rose-400",
-                void: "bg-amber-500/10 text-amber-400",
+                open: "bg-accent/10 text-accent",
+                won:  "bg-success/10 text-success",
+                lost: "bg-danger/10 text-danger",
+                void: "bg-accent-gold/10 text-accent-gold",
               };
               return (
                 <div key={p.id} className="flex items-center gap-3 px-4 sm:px-6 py-3 hover:bg-surface/30 transition-colors">
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
                     <div className="text-xs text-muted truncate">{pred.tip ?? p.sport}</div>
                   </div>
                   {pred.odds && (
-                    <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full shrink-0">{pred.odds}x</span>
+                    <span className="text-xs font-black text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded-full shrink-0">{pred.odds}x</span>
                   )}
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full capitalize shrink-0 ${statusColors[p.status] ?? "bg-surface text-muted"}`}>
                     {p.status}
@@ -313,7 +313,7 @@ export default function AdminDashboard() {
           </Link>
           <Link
             href="/admin/subscriptions"
-            className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs sm:text-sm font-bold rounded-xl hover:bg-purple-500/20 transition-all text-center"
+            className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2.5 bg-accent/10 border border-accent/20 text-accent text-xs sm:text-sm font-bold rounded-xl hover:bg-accent/20 transition-all text-center"
           >
             <CrownIcon /> <span>Subscriptions</span>
           </Link>
@@ -325,7 +325,7 @@ export default function AdminDashboard() {
           </Link>
           <Link
             href="/admin/creators"
-            className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs sm:text-sm font-bold rounded-xl hover:bg-amber-500/20 transition-all text-center"
+            className="flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2.5 bg-accent-gold/10 border border-accent-gold/20 text-accent-gold text-xs sm:text-sm font-bold rounded-xl hover:bg-accent-gold/20 transition-all text-center"
           >
             <CrownIcon /> <span>Creators</span>
           </Link>
@@ -339,7 +339,7 @@ export default function AdminDashboard() {
 function RoleBadge({ role }: { role: string }) {
   return (
     <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-      role === "admin" ? "bg-amber-500/15 text-amber-400" : "bg-surface text-muted"
+      role === "admin" ? "bg-accent-gold/15 text-accent-gold" : "bg-surface text-muted"
     }`}>
       {role}
     </span>
@@ -348,8 +348,8 @@ function RoleBadge({ role }: { role: string }) {
 
 function VerifiedBadge({ verified }: { verified: boolean }) {
   return verified
-    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">✓</span>
-    : <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400">✗</span>;
+    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-success/10 text-success">✓</span>
+    : <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-danger/10 text-danger">✗</span>;
 }
 
 function LoadingSpinner() {
@@ -362,7 +362,7 @@ function LoadingSpinner() {
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="glass border border-rose-500/20 rounded-2xl p-6 text-rose-400 text-sm font-medium">
+    <div className="glass border border-danger/20 rounded-2xl p-6 text-danger text-sm font-medium">
       &#9888; Failed to load dashboard: {message}
     </div>
   );

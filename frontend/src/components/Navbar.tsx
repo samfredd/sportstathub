@@ -59,14 +59,14 @@ export default function Navbar() {
           {/* Logo + Desktop Nav */}
           <div className="flex items-center gap-10">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 bg-accent/10 border border-accent/20 rounded-xl flex items-center justify-center font-black text-accent text-lg shadow-glass group-hover:bg-accent/20 transition-all">
+              <div className="w-9 h-9 bg-accent rounded-xl flex items-center justify-center font-black text-white text-lg shadow-premium group-hover:brightness-110 transition-all">
                 S
               </div>
               <div className="flex flex-col justify-center">
-                <span className="text-foreground font-black text-[15px] leading-none tracking-tight" style={{ fontFamily: "var(--font-display, inherit)" }}>
-                  SPORTSTATHUB
+                <span className="text-foreground font-extrabold text-[16px] leading-none tracking-tight" style={{ fontFamily: "var(--font-display, inherit)" }}>
+                  SportStatHub
                 </span>
-                <span className="text-[9px] text-accent font-black uppercase tracking-[0.3em] mt-0.5">Pro Terminal</span>
+                <span className="text-[10px] text-muted font-semibold mt-1">Football Analytics</span>
               </div>
             </Link>
 

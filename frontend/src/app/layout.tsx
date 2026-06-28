@@ -1,4 +1,20 @@
 import "./globals.css";
+import { Inter, Archivo } from "next/font/google";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+// Sporty, confident display face for headings/scores — replaces the techy
+// "terminal" feel of Rajdhani.
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-archivo",
+  weight: ["500", "600", "700", "800", "900"],
+  display: "swap",
+});
 
 export const metadata = {
   title: "SportStatHub — Football Analytics & Stats",
@@ -7,7 +23,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${archivo.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{

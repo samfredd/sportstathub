@@ -23,22 +23,22 @@ function ExpiryBadge({ expiresAt }: { expiresAt: string }) {
   const exp = new Date(expiresAt).getTime();
   const diffDays = (exp - now) / (1000 * 60 * 60 * 24);
   if (diffDays < 0) {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-rose-400 bg-rose-500/10 border-rose-500/20">Expired</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-danger bg-danger/10 border-danger/20">Expired</span>;
   }
   if (diffDays <= 3) {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-orange-400 bg-orange-500/10 border-orange-500/20">Expiring Soon</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-accent-gold bg-accent-gold/10 border-accent-gold/20">Expiring Soon</span>;
   }
   return null;
 }
 
 function PerformanceBadge({ rate }: { rate: number }) {
   if (rate >= 70) {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-emerald-400 bg-emerald-500/10 border-emerald-500/20">{rate}% ✓</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-success bg-success/10 border-success/20">{rate}% ✓</span>;
   }
   if (rate >= 40) {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-amber-400 bg-amber-500/10 border-amber-500/20">{rate}%</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-accent-gold bg-accent-gold/10 border-accent-gold/20">{rate}%</span>;
   }
-  return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-rose-400 bg-rose-500/10 border-rose-500/20">{rate}% ✗</span>;
+  return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-danger bg-danger/10 border-danger/20">{rate}% ✗</span>;
 }
 
 export default function AdminCodesPage() {
@@ -197,7 +197,7 @@ export default function AdminCodesPage() {
         return (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full shrink-0 ${row.is_active ? "bg-emerald-400" : "bg-muted/40"}`} />
+              <div className={`w-2 h-2 rounded-full shrink-0 ${row.is_active ? "bg-success" : "bg-muted/40"}`} />
               <span className="text-sm font-bold font-mono text-foreground">{row.code}</span>
               {row.expires_at && <ExpiryBadge expiresAt={row.expires_at} />}
               {rate != null && <PerformanceBadge rate={rate} />}
@@ -216,13 +216,13 @@ export default function AdminCodesPage() {
     {
       key: "category", label: "Category",
       render: (row) => row.category
-        ? <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400">{row.category}</span>
+        ? <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-accent/10 text-accent">{row.category}</span>
         : <span className="text-muted/50 text-xs">—</span>,
     },
     {
       key: "total_odds", label: "Odds",
       render: (row) => row.total_odds
-        ? <span className="text-sm font-black text-amber-400">{row.total_odds}x</span>
+        ? <span className="text-sm font-black text-accent-gold">{row.total_odds}x</span>
         : <span className="text-muted/50 text-xs">—</span>,
     },
     {
@@ -243,11 +243,11 @@ export default function AdminCodesPage() {
       key: "actions", label: "Actions",
       render: (row) => (
         <div className="flex items-center gap-1.5">
-          <button onClick={() => handleToggle(row)} className={`text-xs font-bold px-2 py-1 rounded-lg transition-all ${row.is_active ? "text-amber-400 hover:bg-amber-500/10" : "text-emerald-400 hover:bg-emerald-500/10"}`}>
+          <button onClick={() => handleToggle(row)} className={`text-xs font-bold px-2 py-1 rounded-lg transition-all ${row.is_active ? "text-accent-gold hover:bg-accent-gold/10" : "text-success hover:bg-success/10"}`}>
             {row.is_active ? "Deactivate" : "Activate"}
           </button>
           <button onClick={() => openEdit(row)} className="text-xs font-bold text-accent hover:underline px-2 py-1 rounded-lg hover:bg-accent/10 transition-all">Edit</button>
-          <button onClick={() => handleDelete(row)} className="text-xs font-bold text-rose-400 hover:underline px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all">Delete</button>
+          <button onClick={() => handleDelete(row)} className="text-xs font-bold text-danger hover:underline px-2 py-1 rounded-lg hover:bg-danger/10 transition-all">Delete</button>
         </div>
       ),
     },
@@ -386,7 +386,7 @@ function Modal({ title, onClose, children }) {
 
 function Toast({ msg, type }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"}`}>
+    <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-danger text-white" : "bg-success text-white"}`}>
       {msg}
     </div>
   );

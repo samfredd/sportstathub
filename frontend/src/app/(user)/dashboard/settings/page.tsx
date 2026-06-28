@@ -14,11 +14,11 @@ function passwordStrength(pw: string) {
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   const levels = [
     { label: "",          color: "bg-border/30" },
-    { label: "Very weak", color: "bg-rose-500" },
+    { label: "Very weak", color: "bg-danger" },
     { label: "Weak",      color: "bg-orange-500" },
     { label: "Fair",      color: "bg-amber-400" },
-    { label: "Good",      color: "bg-emerald-400" },
-    { label: "Strong",    color: "bg-emerald-500" },
+    { label: "Good",      color: "bg-success" },
+    { label: "Strong",    color: "bg-success" },
   ];
   return { score, ...levels[score] };
 }
@@ -129,15 +129,15 @@ export default function UserSettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted font-medium">Session progress</span>
-                  <span className={`font-black text-sm ${session.expired ? "text-rose-400" : session.pct > 80 ? "text-amber-400" : "text-emerald-400"}`}>
+                  <span className={`font-black text-sm ${session.expired ? "text-danger" : session.pct > 80 ? "text-amber-400" : "text-success"}`}>
                     {session.expired ? "Expired — please sign in again" : `${session.hrs}h ${session.mins}m remaining`}
                   </span>
                 </div>
                 <div className="h-2 w-full bg-surface/60 rounded-full overflow-hidden border border-border/20">
-                  <div className={`h-full rounded-full transition-all duration-500 ${session.expired ? "bg-rose-500" : session.pct > 80 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${session.pct}%` }} />
+                  <div className={`h-full rounded-full transition-all duration-500 ${session.expired ? "bg-danger" : session.pct > 80 ? "bg-amber-400" : "bg-success"}`} style={{ width: `${session.pct}%` }} />
                 </div>
                 {(session.expired || session.pct > 85) && (
-                  <div className={`flex items-center gap-2.5 p-3.5 rounded-xl text-xs font-bold ${session.expired ? "bg-rose-500/8 border border-rose-500/20 text-rose-400" : "bg-amber-500/8 border border-amber-500/20 text-amber-400"}`}>
+                  <div className={`flex items-center gap-2.5 p-3.5 rounded-xl text-xs font-bold ${session.expired ? "bg-danger/8 border border-danger/20 text-danger" : "bg-amber-500/8 border border-amber-500/20 text-amber-400"}`}>
                     <AlertIcon className="w-4 h-4 shrink-0" />
                     {session.expired ? "Your session has expired. Sign out and sign back in." : "Session expiring soon. You'll be signed out shortly."}
                   </div>
@@ -168,7 +168,7 @@ export default function UserSettingsPage() {
                     {strength.label && <p className={`text-xs font-bold ${strength.color.replace("bg-","text-")}`}>{strength.label}</p>}
                     <ul className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
                       {[["At least 8 characters", newPw.length >= 8],["Uppercase letter", /[A-Z]/.test(newPw)],["Number", /[0-9]/.test(newPw)],["Special character", /[^A-Za-z0-9]/.test(newPw)]].map(([label, met]) => (
-                        <li key={label as string} className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${met ? "text-emerald-400" : "text-muted/50"}`}>
+                        <li key={label as string} className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${met ? "text-success" : "text-muted/50"}`}>
                           {met ? <CheckIcon className="w-3 h-3" /> : <DotIcon className="w-3 h-3" />}
                           {label as string}
                         </li>
@@ -179,8 +179,8 @@ export default function UserSettingsPage() {
               </div>
               <div>
                 <PasswordField label="Confirm New Password" value={confirmPw} onChange={setConfirmPw} show={showNew} onToggleShow={() => setShowNew((s) => !s)} autoComplete="new-password" placeholder="Repeat new password" valid={pwMatch} invalid={pwMismatch} />
-                {pwMismatch && <p className="text-xs text-rose-400 font-bold mt-1.5 ml-1">Passwords do not match</p>}
-                {pwMatch    && <p className="text-xs text-emerald-400 font-bold mt-1.5 ml-1">Passwords match</p>}
+                {pwMismatch && <p className="text-xs text-danger font-bold mt-1.5 ml-1">Passwords do not match</p>}
+                {pwMatch    && <p className="text-xs text-success font-bold mt-1.5 ml-1">Passwords match</p>}
               </div>
               <button type="submit" disabled={saving || !currentPw || !newPw || !confirmPw || pwMismatch} className="flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-hover text-white text-sm font-bold rounded-xl transition-all disabled:opacity-40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-accent/20 disabled:hover:translate-y-0">
                 {saving ? <Spinner /> : <LockIcon className="w-4 h-4" />}
@@ -194,7 +194,7 @@ export default function UserSettingsPage() {
             <SectionLabel icon={<LogOutIcon />} title="Sign Out" danger />
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm text-muted font-medium">Clears your session from this browser.</p>
-              <button onClick={handleSignOut} className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/15 hover:border-rose-500/40 text-sm font-bold rounded-xl transition-all">
+              <button onClick={handleSignOut} className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-danger/10 border border-danger/20 text-danger hover:bg-danger/15 hover:border-danger/40 text-sm font-bold rounded-xl transition-all">
                 <LogOutIcon className="w-4 h-4" /> Sign Out
               </button>
             </div>
@@ -203,7 +203,7 @@ export default function UserSettingsPage() {
       </div>
 
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold ${toast.type === "error" ? "bg-rose-500" : "bg-emerald-500"} text-white`}>
+        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold ${toast.type === "error" ? "bg-danger" : "bg-success"} text-white`}>
           {toast.msg}
         </div>
       )}
@@ -214,14 +214,14 @@ export default function UserSettingsPage() {
 function fmt(d: Date) { return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); }
 
 function Card({ children, danger = false }: { children: React.ReactNode; danger?: boolean }) {
-  return <div className={`glass rounded-2xl border p-6 ${danger ? "border-rose-500/20" : "border-border/30"}`}>{children}</div>;
+  return <div className={`glass rounded-2xl border p-6 ${danger ? "border-danger/20" : "border-border/30"}`}>{children}</div>;
 }
 
 function SectionLabel({ icon, title, danger = false, inline = false }: { icon: React.ReactNode; title: string; danger?: boolean; inline?: boolean }) {
   const el = (
     <div className="flex items-center gap-2.5">
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-rose-500/10 text-rose-400" : "bg-accent/10 text-accent"}`}>{icon}</div>
-      <h3 className={`font-black text-sm ${danger ? "text-rose-400" : "text-foreground"}`}>{title}</h3>
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`}>{icon}</div>
+      <h3 className={`font-black text-sm ${danger ? "text-danger" : "text-foreground"}`}>{title}</h3>
     </div>
   );
   return inline ? el : <div className="mb-5">{el}</div>;
@@ -246,10 +246,10 @@ function PasswordField({ label, value, onChange, show, onToggleShow, autoComplet
       <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">{label}</label>
       <div className="relative">
         <input type={show ? "text" : "password"} autoComplete={autoComplete} required value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-          className={`w-full glass px-4 py-2.5 pr-20 rounded-xl text-sm font-medium text-foreground border transition-all focus:outline-none ${invalid ? "border-rose-500/50 focus:border-rose-500/70" : valid ? "border-emerald-500/50 focus:border-emerald-500/70" : "border-border/40 focus:border-accent/50"}`} />
+          className={`w-full glass px-4 py-2.5 pr-20 rounded-xl text-sm font-medium text-foreground border transition-all focus:outline-none ${invalid ? "border-danger/50 focus:border-danger/70" : valid ? "border-success/50 focus:border-success/70" : "border-border/40 focus:border-accent/50"}`} />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {valid   && <CheckIcon className="w-4 h-4 text-emerald-400" />}
-          {invalid && <XIcon className="w-4 h-4 text-rose-400" />}
+          {valid   && <CheckIcon className="w-4 h-4 text-success" />}
+          {invalid && <XIcon className="w-4 h-4 text-danger" />}
           <button type="button" tabIndex={-1} onClick={onToggleShow} className="text-[10px] font-black text-muted hover:text-foreground transition-colors uppercase tracking-wider ml-1">{show ? "Hide" : "Show"}</button>
         </div>
       </div>
@@ -259,7 +259,7 @@ function PasswordField({ label, value, onChange, show, onToggleShow, autoComplet
 
 
 function RoleBadge({ role }: { role: string }) {
-  const styles: Record<string, string> = { admin: "bg-amber-500/10 text-amber-400 border-amber-500/20", creator: "bg-purple-500/10 text-purple-400 border-purple-500/20", user: "bg-surface text-muted border-border/40" };
+  const styles: Record<string, string> = { admin: "bg-danger/10 text-danger border-danger/20", creator: "bg-accent-gold/10 text-accent-gold border-accent-gold/20", user: "bg-surface text-muted border-border/40" };
   return <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wider ${styles[role] ?? styles.user}`}>{role}</span>;
 }
 

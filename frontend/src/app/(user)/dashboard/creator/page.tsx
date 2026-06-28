@@ -114,14 +114,14 @@ function CreatorOverview({ dashboard, onViewTips }: { dashboard: any; onViewTips
           <div className="space-y-2">
             {(dashboard.predictions as any[]).slice(0, 4).map((pred: any) => (
               <div key={pred.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface/40 border border-border/20">
-                <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-emerald-400" : pred.status === "lost" ? "bg-rose-400" : "bg-accent"}`} />
+                <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-success" : pred.status === "lost" ? "bg-danger" : "bg-accent"}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-foreground truncate">{pred.match?.homeTeam?.name} vs {pred.match?.awayTeam?.name}</p>
                   <p className="text-[10px] text-muted mt-0.5">{pred.prediction?.type} · @{pred.prediction?.odds}</p>
                 </div>
                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
-                  pred.status === "won" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
-                  pred.status === "lost" ? "text-rose-400 bg-rose-500/10 border-rose-500/20" :
+                  pred.status === "won" ? "text-success bg-success/10 border-success/20" :
+                  pred.status === "lost" ? "text-danger bg-danger/10 border-danger/20" :
                   "text-accent bg-accent/10 border-accent/20"
                 }`}>{pred.status}</span>
               </div>
@@ -143,8 +143,8 @@ function TipsView({ dashboard }: { dashboard: any }) {
     <div className="space-y-4">
       <div className="glass rounded-2xl p-4 border border-border/30 flex items-center gap-5 text-sm">
         <span className="text-muted font-medium">{predictions.length} tips total</span>
-        <span className="text-emerald-400 font-black">✓ {won} won</span>
-        <span className="text-rose-400 font-black">✗ {lost} lost</span>
+        <span className="text-success font-black">✓ {won} won</span>
+        <span className="text-danger font-black">✗ {lost} lost</span>
         <span className="text-accent font-black">● {open} open</span>
       </div>
 
@@ -158,11 +158,11 @@ function TipsView({ dashboard }: { dashboard: any }) {
         <div className="space-y-3">
           {predictions.map((pred: any) => (
             <div key={pred.id} className="glass rounded-2xl p-4 border border-border/30 flex items-start gap-4">
-              <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-emerald-400" : pred.status === "lost" ? "bg-rose-400" : "bg-accent"}`} />
+              <div className={`w-1 self-stretch rounded-full shrink-0 ${pred.status === "won" ? "bg-success" : pred.status === "lost" ? "bg-danger" : "bg-accent"}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-bold text-foreground">{pred.match?.homeTeam?.name} vs {pred.match?.awayTeam?.name}</p>
-                  <span className={`text-[11px] font-black uppercase shrink-0 ${pred.status === "won" ? "text-emerald-400" : pred.status === "lost" ? "text-rose-400" : "text-accent"}`}>{pred.status}</span>
+                  <span className={`text-[11px] font-black uppercase shrink-0 ${pred.status === "won" ? "text-success" : pred.status === "lost" ? "text-danger" : "text-accent"}`}>{pred.status}</span>
                 </div>
                 <p className="text-[11px] text-muted mt-0.5">{pred.prediction?.type} · @{pred.prediction?.odds} · {pred.prediction?.confidence}% conf</p>
                 <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted">
@@ -214,7 +214,7 @@ function PostTip({ onPost }: { onPost: () => void }) {
       <div className="flex items-center gap-2">
         {steps.map((label, i) => (
           <div key={label} className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black border transition-all ${step > i+1 ? "bg-emerald-500 border-emerald-500 text-white" : step === i+1 ? "bg-accent border-accent text-white" : "border-border text-muted"}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black border transition-all ${step > i+1 ? "bg-success border-success text-white" : step === i+1 ? "bg-accent border-accent text-white" : "border-border text-muted"}`}>
               {step > i+1 ? "✓" : i+1}
             </div>
             <span className={`text-sm font-bold ${step >= i+1 ? "text-foreground" : "text-muted"}`}>{label}</span>
@@ -223,7 +223,7 @@ function PostTip({ onPost }: { onPost: () => void }) {
         ))}
       </div>
 
-      {error && <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-sm font-bold">{error}</div>}
+      {error && <div className="p-3 bg-danger/10 border border-danger/20 rounded-xl text-danger text-sm font-bold">{error}</div>}
 
       <form onSubmit={handleSubmit}>
         {step === 1 && (
@@ -301,7 +301,7 @@ function BecomeCreator({ onSuccess }: { onSuccess: (role: string) => void }) {
   if (done) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-        <div className="w-16 h-16 bg-emerald-500/15 border-2 border-emerald-500/30 rounded-2xl flex items-center justify-center text-3xl">🎉</div>
+        <div className="w-16 h-16 bg-success/15 border-2 border-success/30 rounded-2xl flex items-center justify-center text-3xl">🎉</div>
         <h2 className="text-2xl font-black text-foreground">You&apos;re now a Creator!</h2>
         <p className="text-muted text-sm">Setting up your creator dashboard…</p>
         <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mt-2" />
@@ -319,8 +319,8 @@ function BecomeCreator({ onSuccess }: { onSuccess: (role: string) => void }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Left — Hero + Agreement */}
         <div className="space-y-5">
-          <div className="glass rounded-2xl p-7 border border-purple-500/20 bg-gradient-to-br from-purple-500/8 to-transparent">
-            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-black text-purple-400 bg-purple-500/10 border border-purple-500/20 mb-3">Creator Program</span>
+          <div className="glass rounded-2xl p-7 border border-accent-gold/25 bg-gradient-to-br from-accent-gold-soft to-transparent">
+            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-black text-accent-gold bg-accent-gold-soft border border-accent-gold/25 mb-3">Creator Program</span>
             <h3 className="text-xl font-black text-foreground">Earn from your predictions</h3>
             <p className="text-sm text-muted mt-2 leading-relaxed">Post predictions, share booking codes and earn affiliate commissions every time a user places a bet through your code.</p>
             <div className="flex items-center gap-6 mt-5 pt-5 border-t border-border/30">
@@ -337,7 +337,7 @@ function BecomeCreator({ onSuccess }: { onSuccess: (role: string) => void }) {
               </div>
               <span className="text-sm text-foreground font-medium">I agree to the Creator Terms of Service and understand that my predictions and codes are public.</span>
             </label>
-            {error && <p className="text-rose-400 text-sm font-bold">{error}</p>}
+            {error && <p className="text-danger text-sm font-bold">{error}</p>}
             <button onClick={handleApply} disabled={!agreed || loading} className="w-full py-3 rounded-xl text-sm font-black text-white transition-all hover:-translate-y-0.5 disabled:opacity-40" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)" }}>
               {loading ? "Activating creator account…" : "Become a Creator →"}
             </button>

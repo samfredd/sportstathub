@@ -96,8 +96,8 @@ export default function RegisterPage() {
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center font-black text-white text-lg shadow-lg">S</div>
           <div>
-            <p className="font-black text-foreground text-base leading-none tracking-tight">SPORTSTATHUB</p>
-            <p className="text-[10px] text-accent font-black uppercase tracking-[0.3em] mt-0.5">Pro Terminal</p>
+            <p className="font-black text-foreground text-base leading-none tracking-tight">SportStatHub</p>
+            <p className="text-[10px] text-muted font-semibold mt-1">Football Analytics</p>
           </div>
         </div>
 
@@ -145,7 +145,7 @@ export default function RegisterPage() {
           {/* Mobile logo */}
           <div className="flex items-center gap-2.5 mb-8 lg:hidden">
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center font-black text-white text-sm">S</div>
-            <p className="font-black text-foreground tracking-tight">SPORTSTATHUB</p>
+            <p className="font-black text-foreground tracking-tight">SportStatHub</p>
           </div>
 
           <div className="mb-8">

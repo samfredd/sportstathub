@@ -12,8 +12,8 @@ function timeAgo(iso: string): string {
 }
 
 const BADGE_STYLES: Record<string, string> = {
-  elite:    "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  pro:      "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  elite:    "bg-accent-gold text-white border-accent-gold/40",
+  pro:      "bg-accent-gold/15 text-accent-gold border-accent-gold/30",
   verified: "bg-accent/15 text-accent border-accent/25",
 };
 

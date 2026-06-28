@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-28T00:00:00Z",
+  "title": "Design System: SportStatHub",
+  "extensions": {
+    "colorMeta": {
+      "emerald": {
+        "role": "primary",
+        "displayName": "Pitch Emerald",
+        "canonical": "oklch(0.56 0.12 162)",
+        "tonalRamp": ["oklch(0.20 0.06 162)", "oklch(0.30 0.09 162)", "oklch(0.40 0.11 162)", "oklch(0.50 0.12 162)", "oklch(0.60 0.12 162)", "oklch(0.72 0.10 162)", "oklch(0.84 0.06 162)", "oklch(0.94 0.03 162)"]
+      },
+      "gold": {
+        "role": "secondary",
+        "displayName": "Trophy Gold",
+        "canonical": "oklch(0.55 0.15 58)",
+        "tonalRamp": ["oklch(0.22 0.07 58)", "oklch(0.32 0.10 58)", "oklch(0.42 0.13 58)", "oklch(0.52 0.15 58)", "oklch(0.62 0.15 58)", "oklch(0.74 0.12 58)", "oklch(0.85 0.08 58)", "oklch(0.94 0.04 58)"]
+      },
+      "live-red": {
+        "role": "tertiary",
+        "displayName": "Live Red",
+        "canonical": "oklch(0.60 0.22 25)",
+        "tonalRamp": ["oklch(0.25 0.10 25)", "oklch(0.35 0.14 25)", "oklch(0.45 0.18 25)", "oklch(0.55 0.21 25)", "oklch(0.62 0.22 25)", "oklch(0.74 0.16 25)", "oklch(0.85 0.09 25)", "oklch(0.94 0.04 25)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.20 0.03 264)",
+        "tonalRamp": ["oklch(0.15 0.03 264)", "oklch(0.25 0.03 264)", "oklch(0.38 0.025 264)", "oklch(0.50 0.02 264)", "oklch(0.62 0.018 264)", "oklch(0.75 0.012 264)", "oklch(0.88 0.008 264)", "oklch(0.96 0.004 264)"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": ["oklch(0.16 0.01 250)", "oklch(0.22 0.012 250)", "oklch(0.30 0.01 250)", "oklch(0.45 0.008 250)", "oklch(0.62 0.006 250)", "oklch(0.80 0.004 250)", "oklch(0.94 0.004 250)", "oklch(1 0 0)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "oklch(0.50 0.02 255)",
+        "tonalRamp": ["oklch(0.30 0.02 255)", "oklch(0.40 0.02 255)", "oklch(0.50 0.02 255)", "oklch(0.58 0.018 255)", "oklch(0.66 0.016 255)", "oklch(0.76 0.012 255)", "oklch(0.86 0.008 255)", "oklch(0.94 0.004 255)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display / Scoreline", "purpose": "Hero headlines and big match scorelines (Archivo 800, tabular)." },
+      "headline": { "displayName": "Headline", "purpose": "Page and section titles." },
+      "title": { "displayName": "Title", "purpose": "Card titles, team names, thread titles." },
+      "body": { "displayName": "Body", "purpose": "Descriptions and prose; cap at 65-75ch." },
+      "label": { "displayName": "Label", "purpose": "Stat labels and status chips; used sparingly, never as a per-section eyebrow." }
+    },
+    "shadows": [
+      { "name": "resting", "value": "0 1px 2px rgba(11,18,32,0.04), 0 6px 16px rgba(11,18,32,0.07)", "purpose": "Default elevation for cards, panels, dropdowns (light)." },
+      { "name": "resting-dark", "value": "0 2px 6px rgba(0,0,0,0.30), 0 12px 32px rgba(0,0,0,0.40)", "purpose": "Default elevation in dark mode." },
+      { "name": "hover-lift", "value": "0 2px 4px rgba(11,18,32,0.05), 0 10px 24px rgba(11,18,32,0.10)", "purpose": "Interactive cards / primary buttons on hover, paired with translateY(-1px)." },
+      { "name": "focus-ring", "value": "0 0 0 3px rgba(0,135,90,0.20)", "purpose": "The only glow-shaped value allowed: a functional focus affordance on inputs/controls." }
+    ],
+    "motion": [
+      { "name": "ease-out-standard", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Default exponential ease-out for state transitions. No bounce, no elastic." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Button/hover/focus state changes." },
+      { "name": "duration-base", "value": "240ms", "purpose": "Card hover, carousel slide, reveals." },
+      { "name": "pulse-live", "value": "1.5s cubic-bezier(0.4,0,0.6,1) infinite", "purpose": "The live-match red dot pulse." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The confident default CTA. Solid emerald, lifts on hover.",
+      "html": "<button class=\"ds-btn-primary\">Today's Tips</button>",
+      "css": ".ds-btn-primary { background: #00875A; color: #fff; font-family: Inter, sans-serif; font-weight: 700; font-size: 14px; padding: 10px 20px; border: none; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,18,32,0.10); cursor: pointer; transition: background .15s, transform .15s, box-shadow .15s; } .ds-btn-primary:hover { background: #006E49; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,135,90,0.35); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,135,90,0.30); }"
+    },
+    {
+      "name": "Gold / Premium Button",
+      "kind": "button",
+      "refersTo": "button-gold",
+      "description": "Premium and creator actions only.",
+      "html": "<button class=\"ds-btn-gold\">Go PRO</button>",
+      "css": ".ds-btn-gold { background: #B45309; color: #fff; font-family: Inter, sans-serif; font-weight: 700; font-size: 14px; padding: 10px 20px; border: none; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,18,32,0.10); cursor: pointer; transition: background .15s, transform .15s; } .ds-btn-gold:hover { background: #92400E; transform: translateY(-1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary / tertiary action.",
+      "html": "<button class=\"ds-btn-ghost\">See creators</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: #5A6776; font-family: Inter, sans-serif; font-weight: 600; font-size: 14px; padding: 8px 16px; border: none; border-radius: 12px; cursor: pointer; transition: background .15s, color .15s; } .ds-btn-ghost:hover { background: rgba(0,135,90,0.10); color: #0B1220; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Surface container with hairline border and resting elevation; lifts on hover.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">England Premier League</div><div class=\"ds-card-body\">Arsenal vs Chelsea · today 20:00</div></div>",
+      "css": ".ds-card { background: #fff; color: #0B1220; border: 1px solid rgba(11,18,32,0.10); border-radius: 17px; padding: 20px; box-shadow: 0 1px 2px rgba(11,18,32,0.04), 0 6px 16px rgba(11,18,32,0.07); transition: transform .24s cubic-bezier(0.22,1,0.36,1), box-shadow .24s; } .ds-card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(11,18,32,0.05), 0 10px 24px rgba(11,18,32,0.10); } .ds-card-title { font-family: Inter, sans-serif; font-weight: 700; font-size: 13px; color: #0B1220; } .ds-card-body { font-family: Inter, sans-serif; font-size: 13px; color: #5A6776; margin-top: 4px; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Surface fill, hairline border, emerald focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search leagues...\" />",
+      "css": ".ds-input { width: 100%; background: #fff; color: #0B1220; font-family: Inter, sans-serif; font-size: 14px; padding: 10px 16px; border: 1px solid rgba(11,18,32,0.10); border-radius: 12px; outline: none; transition: border-color .15s, box-shadow .15s; } .ds-input::placeholder { color: #5A6776; } .ds-input:focus { border-color: #00875A; box-shadow: 0 0 0 3px rgba(0,135,90,0.20); }"
+    },
+    {
+      "name": "Live Chip",
+      "kind": "chip",
+      "refersTo": "badge-live",
+      "description": "Live-match status pill with a pulsing dot.",
+      "html": "<span class=\"ds-chip-live\"><span class=\"ds-dot\"></span>LIVE</span>",
+      "css": ".ds-chip-live { display: inline-flex; align-items: center; gap: 6px; background: rgba(220,38,38,0.10); color: #DC2626; border: 1px solid rgba(220,38,38,0.25); font-family: Inter, sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.06em; padding: 3px 10px; border-radius: 9999px; } .ds-dot { width: 6px; height: 6px; border-radius: 9999px; background: #DC2626; animation: ds-pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite; } @keyframes ds-pulse { 0%,100% { opacity: .8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } } @media (prefers-reduced-motion: reduce) { .ds-dot { animation: none; } }"
+    },
+    {
+      "name": "Score Header",
+      "kind": "custom",
+      "refersTo": "score-header",
+      "description": "Signature match-detail scoreline: big Archivo tabular score flanked by team names.",
+      "html": "<div class=\"ds-score\"><span class=\"ds-team\">Croatia</span><span class=\"ds-num\">1 - 0</span><span class=\"ds-team\">Ghana</span></div>",
+      "css": ".ds-score { display: flex; align-items: center; justify-content: center; gap: 28px; } .ds-team { font-family: Archivo, Inter, sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.01em; color: #0B1220; } .ds-num { font-family: Archivo, Inter, sans-serif; font-weight: 800; font-size: 56px; line-height: 1; letter-spacing: -0.02em; color: #0B1220; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Confident Scoreboard",
+    "overview": "SportStatHub looks and feels like a live scoreboard run by someone who actually knows the numbers: decisive, numbers-forward, momentum-driven, but disciplined and legible. Scores, odds, and confidence are stated plainly and boldly; the chrome stays quiet so the data carries the screen. One brand voice: refined emerald for actions and live signal, deep gold reserved strictly for premium and creator surfaces, everything else a disciplined neutral ramp. Energy comes from strong display typography, real elevation, and purposeful motion, never gradients, glows, banners, or gamification. Dark mode is a first-class, matchday-native theme on designed slate, not OLED black.",
+    "keyCharacteristics": [
+      "One brand voice: refined emerald; gold for premium only; red means live/loss only.",
+      "Numbers-forward: bold Archivo scorelines and tabular figures are the hero.",
+      "Real elevation, never neon glow. Designed dark slate, not OLED black.",
+      "Mobile-first, thumb-first, WCAG AA, full reduced-motion support.",
+      "Colour carries meaning; if a hue isn't saying something, it's a neutral."
+    ],
+    "rules": [
+      { "name": "The One Green Rule", "body": "Emerald is the only brand colour that appears freely. Gold only on premium/creator surfaces; red only on live/loss/error. A third decorative hue (purple/blue/indigo/sky) is a bug to remove.", "section": "colors" },
+      { "name": "The Designed-Slate Rule", "body": "Dark mode is #0B0F17 canvas / #141A24 surface, never pure #000000. OLED-black reads as the AI-terminal default.", "section": "colors" },
+      { "name": "The No-Eyebrow-Reflex Rule", "body": "Tiny uppercase tracked labels are forbidden as a default scaffold above every section. Prefer a strong Archivo headline.", "section": "typography" },
+      { "name": "The Tabular Score Rule", "body": "Every comparing number uses tabular-nums so columns align and figures don't jitter.", "section": "typography" },
+      { "name": "The No-Glow Rule", "body": "Forbidden: box-shadow 0 0 Npx <colour> neon halos. Depth = layered elevation + 1px border. The only 0 0 0 Npx allowed is the 3px focus ring.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Pitch Emerald (#00875A) as the single brand voice; reserve Trophy Gold (#B45309) for premium/creator and Live Red (#DC2626) for live/loss/error only.",
+      "Do convey depth with layered elevation + a 1px border, and lift interactive elements on hover.",
+      "Do set every comparing number in tabular-nums; lead match pages with a bold Archivo scoreline.",
+      "Do keep body text ≥4.5:1 (large ≥3:1); when contrast is close, push toward Ink, never toward light gray.",
+      "Do ship a prefers-reduced-motion alternative for every animation, and design mobile-first.",
+      "Do keep dark mode on designed slate (#0B0F17 / #141A24)."
+    ],
+    "donts": [
+      "Don't ship the generic AI-SaaS look: no neon glow shadows (0 0 20px), no glassmorphism-by-default, no gradient text, no rainbow stat cards, no Inter-for-everything, no tiny uppercase eyebrow above every section.",
+      "Don't drift into cluttered bookmaker aesthetics: no banner spam, neon, aggressive popups, or ad takeovers.",
+      "Don't fall back to a bland gray data-table tool with no identity (the Statof trap).",
+      "Don't add casino gamification: no coins, confetti, or slot-machine flourishes.",
+      "Don't introduce a third decorative hue (purple/blue/indigo/sky) to differentiate cards.",
+      "Don't use a colored border-left/border-right > 1px as a side-stripe accent, or nest a card inside a card."
+    ]
+  }
+}

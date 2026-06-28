@@ -35,11 +35,11 @@ function passwordStrength(pw: string): { score: number; label: string; color: st
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   const levels = [
     { label: "",          color: "bg-border/30" },
-    { label: "Very weak", color: "bg-rose-500" },
-    { label: "Weak",      color: "bg-orange-500" },
-    { label: "Fair",      color: "bg-amber-400" },
-    { label: "Good",      color: "bg-emerald-400" },
-    { label: "Strong",    color: "bg-emerald-500" },
+    { label: "Very weak", color: "bg-danger" },
+    { label: "Weak",      color: "bg-accent-gold" },
+    { label: "Fair",      color: "bg-accent-gold" },
+    { label: "Good",      color: "bg-success" },
+    { label: "Strong",    color: "bg-success" },
   ];
   return { score, ...levels[score] };
 }
@@ -216,7 +216,7 @@ export default function AdminSettingsPage() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center shadow-lg">
               <span className="text-2xl font-black text-accent">{user?.email?.[0]?.toUpperCase() || "A"}</span>
             </div>
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background flex items-center justify-center">
               <ShieldCheckIcon className="w-2.5 h-2.5 text-white" />
             </div>
           </div>
@@ -224,7 +224,7 @@ export default function AdminSettingsPage() {
             <div className="text-lg font-black text-foreground truncate">{user?.username || user?.email || "Admin"}</div>
             <div className="text-sm text-muted truncate">{user?.email}</div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1 rounded-full bg-accent-gold/10 text-accent-gold uppercase tracking-wider">
                 <StarIcon className="w-2.5 h-2.5" />
                 {user?.role || "admin"}
               </span>
@@ -289,7 +289,7 @@ export default function AdminSettingsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted font-medium">Session progress</span>
-              <span className={`font-black text-sm ${session.expired ? "text-rose-400" : session.pct > 80 ? "text-amber-400" : "text-emerald-400"}`}>
+              <span className={`font-black text-sm ${session.expired ? "text-danger" : session.pct > 80 ? "text-accent-gold" : "text-success"}`}>
                 {session.expired
                   ? "Expired — please sign in again"
                   : `${session.hrs}h ${session.mins}m remaining`}
@@ -298,7 +298,7 @@ export default function AdminSettingsPage() {
             <div className="h-2 w-full bg-surface/60 rounded-full overflow-hidden border border-border/20">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  session.expired ? "bg-rose-500" : session.pct > 80 ? "bg-amber-400" : "bg-emerald-400"
+                  session.expired ? "bg-danger" : session.pct > 80 ? "bg-accent-gold" : "bg-success"
                 }`}
                 style={{ width: `${session.pct}%` }}
               />
@@ -308,7 +308,7 @@ export default function AdminSettingsPage() {
               <StatPill label="Expires" value={expiresAt ? expiresAt.toLocaleString("en-GB") : "—"} warn={session.expired || session.pct > 80} />
             </div>
             {(session.expired || session.pct > 85) && (
-              <div className={`flex items-center gap-2.5 p-3.5 rounded-xl text-xs font-bold ${session.expired ? "bg-rose-500/8 border border-rose-500/20 text-rose-400" : "bg-amber-500/8 border border-amber-500/20 text-amber-400"}`}>
+              <div className={`flex items-center gap-2.5 p-3.5 rounded-xl text-xs font-bold ${session.expired ? "bg-danger/8 border border-danger/20 text-danger" : "bg-accent-gold/8 border border-accent-gold/20 text-accent-gold"}`}>
                 <AlertIcon className="w-4 h-4 shrink-0" />
                 {session.expired ? "Your session has expired. Sign out and sign back in." : "Session is almost expired. You'll be signed out soon."}
               </div>
@@ -364,7 +364,7 @@ export default function AdminSettingsPage() {
                     ["Number",                 /[0-9]/.test(newPw)],
                     ["Special character",      /[^A-Za-z0-9]/.test(newPw)],
                   ].map(([label, met]) => (
-                    <li key={label as string} className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${met ? "text-emerald-400" : "text-muted/50"}`}>
+                    <li key={label as string} className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${met ? "text-success" : "text-muted/50"}`}>
                       {met ? <CheckIcon className="w-3 h-3" /> : <DotIcon className="w-3 h-3" />}
                       {label as string}
                     </li>
@@ -385,8 +385,8 @@ export default function AdminSettingsPage() {
               valid={pwMatch}
               invalid={pwMismatch}
             />
-            {pwMismatch && <p className="text-xs text-rose-400 font-bold mt-1.5 ml-1">Passwords do not match</p>}
-            {pwMatch    && <p className="text-xs text-emerald-400 font-bold mt-1.5 ml-1">Passwords match</p>}
+            {pwMismatch && <p className="text-xs text-danger font-bold mt-1.5 ml-1">Passwords do not match</p>}
+            {pwMatch    && <p className="text-xs text-success font-bold mt-1.5 ml-1">Passwords match</p>}
           </div>
           <div className="flex items-center gap-3 pt-1">
             <button
@@ -406,7 +406,7 @@ export default function AdminSettingsPage() {
         <div className="flex items-center justify-between mb-5">
           <CardHeader icon={<BellIcon />} title="Notification Preferences" inline />
           {notifSaved && (
-            <span className="text-[11px] font-black text-emerald-400 flex items-center gap-1">
+            <span className="text-[11px] font-black text-success flex items-center gap-1">
               <CheckIcon className="w-3 h-3" /> Saved
             </span>
           )}
@@ -523,7 +523,7 @@ export default function AdminSettingsPage() {
           </div>
           <button
             onClick={handleSignOut}
-            className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/15 hover:border-rose-500/40 text-sm font-bold rounded-xl transition-all"
+            className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-danger/10 border border-danger/20 text-danger hover:bg-danger/15 hover:border-danger/40 text-sm font-bold rounded-xl transition-all"
           >
             <LogOutIcon className="w-4 h-4" />
             Sign Out
@@ -544,7 +544,7 @@ function fmtTime(d: Date) {
 // ─── Layout atoms ────────────────────────────────────────────
 function Card({ children, danger = false }: { children: React.ReactNode; danger?: boolean }) {
   return (
-    <div className={`glass rounded-2xl border p-6 ${danger ? "border-rose-500/20" : "border-border/30"}`}>
+    <div className={`glass rounded-2xl border p-6 ${danger ? "border-danger/20" : "border-border/30"}`}>
       {children}
     </div>
   );
@@ -553,10 +553,10 @@ function Card({ children, danger = false }: { children: React.ReactNode; danger?
 function CardHeader({ icon, title, danger = false, inline = false }: { icon: React.ReactNode; title: string; danger?: boolean; inline?: boolean }) {
   const el = (
     <div className="flex items-center gap-2.5">
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-rose-500/10 text-rose-400" : "bg-accent/10 text-accent"}`}>
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`}>
         {icon}
       </div>
-      <h3 className={`font-black text-sm ${danger ? "text-rose-400" : "text-foreground"}`}>{title}</h3>
+      <h3 className={`font-black text-sm ${danger ? "text-danger" : "text-foreground"}`}>{title}</h3>
     </div>
   );
   return inline ? el : <div className="mb-5">{el}</div>;
@@ -566,7 +566,7 @@ function StatPill({ label, value, warn = false }: { label: string; value: string
   return (
     <div className="bg-surface/40 rounded-xl px-4 py-3 border border-border/20">
       <div className="text-[10px] font-black text-muted uppercase tracking-wider mb-0.5">{label}</div>
-      <div className={`text-sm font-bold truncate ${warn ? "text-amber-400" : "text-foreground"}`}>{value}</div>
+      <div className={`text-sm font-bold truncate ${warn ? "text-accent-gold" : "text-foreground"}`}>{value}</div>
     </div>
   );
 }
@@ -609,14 +609,14 @@ function PasswordField({ label, value, onChange, show, onToggleShow, autoComplet
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className={`w-full glass px-4 py-2.5 pr-20 rounded-xl text-sm font-medium text-foreground border transition-all focus:outline-none ${
-            invalid ? "border-rose-500/50 focus:border-rose-500/70" :
-            valid   ? "border-emerald-500/50 focus:border-emerald-500/70" :
+            invalid ? "border-danger/50 focus:border-danger/70" :
+            valid   ? "border-success/50 focus:border-success/70" :
                       "border-border/40 focus:border-accent/50"
           }`}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {valid   && <CheckIcon className="w-4 h-4 text-emerald-400" />}
-          {invalid && <XIcon className="w-4 h-4 text-rose-400" />}
+          {valid   && <CheckIcon className="w-4 h-4 text-success" />}
+          {invalid && <XIcon className="w-4 h-4 text-danger" />}
           <button type="button" tabIndex={-1} onClick={onToggleShow} className="text-[10px] font-black text-muted hover:text-foreground transition-colors uppercase tracking-wider ml-1">
             {show ? "Hide" : "Show"}
           </button>
@@ -628,9 +628,9 @@ function PasswordField({ label, value, onChange, show, onToggleShow, autoComplet
 
 function HealthTile({ label, status, detail }: { label: string; status: "online" | "offline" | "degraded" | "neutral"; detail: string }) {
   const styles = {
-    online:   { dot: "bg-emerald-400 animate-pulse", text: "text-emerald-400", bg: "bg-emerald-500/5 border-emerald-500/20", label: "Online" },
-    offline:  { dot: "bg-rose-400",   text: "text-rose-400",   bg: "bg-rose-500/5 border-rose-500/20",     label: "Offline" },
-    degraded: { dot: "bg-amber-400",  text: "text-amber-400",  bg: "bg-amber-500/5 border-amber-500/20",   label: "Degraded" },
+    online:   { dot: "bg-success animate-pulse", text: "text-success", bg: "bg-success/5 border-success/20", label: "Online" },
+    offline:  { dot: "bg-danger",   text: "text-danger",   bg: "bg-danger/5 border-danger/20",     label: "Offline" },
+    degraded: { dot: "bg-accent-gold",  text: "text-accent-gold",  bg: "bg-accent-gold/5 border-accent-gold/20",   label: "Degraded" },
     neutral:  { dot: "bg-muted/40",   text: "text-muted",      bg: "bg-surface/40 border-border/20",       label: detail },
   }[status];
 
@@ -651,7 +651,7 @@ function HealthTile({ label, status, detail }: { label: string; status: "online"
 function Toast({ msg, type }: { msg: string; type: string }) {
   return (
     <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${
-      type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
+      type === "error" ? "bg-danger text-white" : "bg-success text-white"
     }`}>
       {msg}
     </div>

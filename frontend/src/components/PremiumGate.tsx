@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import { useUpgradeModal } from "@/context/UpgradeModalContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
@@ -43,7 +42,6 @@ export default function PremiumGate({
   const { isPro, isAdmin, plan, loading: subLoading } = useSubscription();
   const { flags, loading: flagsLoading } = useFeatureFlags();
   const { openUpgradeModal } = useUpgradeModal();
-  const didAutoOpen = useRef(false);
 
   // ── Compute access state upfront (hooks must not be called conditionally) ──
   const loading = subLoading || (!!flagKey && flagsLoading);
@@ -68,13 +66,9 @@ export default function PremiumGate({
     }
   }
 
-  // ── Auto-open the upgrade modal the first time this gate activates ─────────
-  useEffect(() => {
-    if (!loading && !hasAccess && !didAutoOpen.current) {
-      didAutoOpen.current = true;
-      openUpgradeModal(feature);
-    }
-  }, [loading, hasAccess, feature, openUpgradeModal]);
+  // The modal is opened only on an explicit user action (clicking a locked
+  // overlay/badge below) — never auto-popped on mount, which would slam a
+  // paywall in front of every visitor the moment a page loads.
 
   // Pass-through while loading or user has access
   if (loading || hasAccess) return <>{children}</>;

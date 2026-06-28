@@ -9,33 +9,35 @@
    ========================= */
 
 :root {
-  /* LIGHT THEME — PROFESSIONAL */
-  --background: #EEF2F7;
-  --foreground: #0F172A;
+  /* LIGHT THEME — BOLD SPORTY */
+  --background: #F1F3F6;
+  --foreground: #0B1220;
   --surface: #FFFFFF;
-  --surface-hover: #F8FAFC;
-  --border: rgba(15, 23, 42, 0.12);
+  --surface-hover: #F5F7FA;
+  --border: rgba(11, 18, 32, 0.10);
 
-  --accent: #059669;
-  --accent-hover: #047857;
-  --accent-soft: rgba(5, 150, 105, 0.10);
-  --accent-gradient: linear-gradient(135deg, #047857, #059669);
+  /* Refined emerald — deeper and richer than the old neon green */
+  --accent: #00875A;
+  --accent-hover: #006E49;
+  --accent-soft: rgba(0, 135, 90, 0.10);
+  --accent-gradient: linear-gradient(135deg, #00A36C, #00875A);
 
   --accent-gold: #B45309;
   --accent-gold-hover: #92400E;
   --accent-gold-soft: rgba(180, 83, 9, 0.10);
   --accent-gold-gradient: linear-gradient(135deg, #92400E, #B45309);
 
-  --live: #B91C1C;
-  --live-soft: rgba(185, 28, 28, 0.10);
+  --live: #DC2626;
+  --live-soft: rgba(220, 38, 38, 0.10);
 
-  --text-muted: #475569;
-  --success: #047857;
-  --danger: #B91C1C;
+  --text-muted: #5A6776;
+  --success: #00875A;
+  --danger: #DC2626;
 
-  --glass-bg: rgba(255, 255, 255, 0.80);
-  --glass-border: rgba(15, 23, 42, 0.08);
-  --shadow-premium-value: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(11, 18, 32, 0.08);
+  /* Real layered elevation instead of decorative glows */
+  --shadow-premium-value: 0 1px 2px rgba(11, 18, 32, 0.04), 0 6px 16px rgba(11, 18, 32, 0.07);
 
   --card: var(--surface);
   --card-foreground: var(--foreground);
@@ -43,20 +45,20 @@
   --popover-foreground: var(--foreground);
   --primary: var(--accent);
   --primary-foreground: #FFFFFF;
-  --secondary: #E2E8F0;
-  --secondary-foreground: #0F172A;
-  --muted: #E2E8F0;
+  --secondary: #EAEDF2;
+  --secondary-foreground: #0B1220;
+  --muted: #EAEDF2;
   --muted-foreground: var(--text-muted);
   --accent-foreground: #FFFFFF;
   --destructive: var(--danger);
-  --input: rgba(15, 23, 42, 0.06);
-  --ring: rgba(5, 150, 105, 0.40);
-  --chart-1: #059669;
+  --input: rgba(11, 18, 32, 0.05);
+  --ring: rgba(0, 135, 90, 0.40);
+  --chart-1: #00875A;
   --chart-2: #B45309;
   --chart-3: #0284C7;
-  --chart-4: #B91C1C;
+  --chart-4: #DC2626;
   --chart-5: #7C3AED;
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   --sidebar: var(--surface);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--accent);
@@ -68,34 +70,34 @@
 }
 
 .dark {
-  /* DARK THEME — OLED DATA TERMINAL */
-  --background: #05070B;
-  --foreground: #F8FAFC;
+  /* DARK THEME — BOLD SPORTY (designed slate, not pure-black terminal) */
+  --background: #0B0F17;
+  --foreground: #F4F7FB;
 
-  --surface: #0B0E14;
-  --surface-hover: #121721;
-  --border: rgba(255, 255, 255, 0.06);
+  --surface: #141A24;
+  --surface-hover: #1B2230;
+  --border: rgba(255, 255, 255, 0.09);
 
-  --accent: #059669;
-  --accent-hover: #10B981;
-  --accent-soft: rgba(5, 150, 105, 0.15);
-  --accent-gradient: linear-gradient(135deg, #047857, #059669);
+  --accent: #12B981;
+  --accent-hover: #34D399;
+  --accent-soft: rgba(18, 185, 129, 0.15);
+  --accent-gradient: linear-gradient(135deg, #0E9E6E, #12B981);
 
   --accent-gold: #F59E0B;
   --accent-gold-hover: #FBBF24;
   --accent-gold-soft: rgba(245, 158, 11, 0.15);
   --accent-gold-gradient: linear-gradient(135deg, #D97706, #F59E0B);
 
-  --live: #EF4444;
-  --live-soft: rgba(239, 68, 68, 0.15);
+  --live: #F23E4D;
+  --live-soft: rgba(242, 62, 77, 0.16);
 
-  --text-muted: #8B9BB4;
-  --success: #10B981;
+  --text-muted: #93A1B5;
+  --success: #12B981;
   --danger: #F87171;
 
-  --glass-bg: rgba(11, 14, 20, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.05);
-  --shadow-premium-value: 0 8px 30px rgba(0, 0, 0, 0.22), 0 4px 10px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255,255,255,0.02);
+  --glass-bg: rgba(20, 26, 36, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --shadow-premium-value: 0 2px 6px rgba(0, 0, 0, 0.30), 0 12px 32px rgba(0, 0, 0, 0.40);
   --card: var(--surface);
   --card-foreground: var(--foreground);
   --popover: var(--surface);
@@ -109,8 +111,8 @@
   --accent-foreground: #04110C;
   --destructive: var(--danger);
   --input: rgba(255, 255, 255, 0.1);
-  --ring: rgba(5, 150, 105, 0.48);
-  --chart-1: #059669;
+  --ring: rgba(18, 185, 129, 0.48);
+  --chart-1: #12B981;
   --chart-2: #F59E0B;
   --chart-3: #38BDF8;
   --chart-4: #F87171;
@@ -149,17 +151,18 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: "Rajdhani", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   --shadow-premium: var(--shadow-premium-value);
 
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.2),
                   inset 0 1px 0 rgba(255,255,255,0.03);
 
-  --shadow-blue-glow: 0 0 20px rgba(16, 185, 129, 0.25);
-  --shadow-gold-glow: 0 0 20px rgba(245, 158, 11, 0.25);
-  --font-heading: "Rajdhani", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Kept as subtle elevation tokens (no neon glow) for back-compat with callers */
+  --shadow-blue-glow: var(--shadow-premium-value);
+  --shadow-gold-glow: var(--shadow-premium-value);
+  --font-heading: var(--font-archivo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -207,9 +210,9 @@
   }
 
   h1, h2, h3 {
-    font-family: var(--font-display, "Rajdhani", sans-serif);
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    font-family: var(--font-display, ui-sans-serif, sans-serif);
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
   * {
     @apply border-border outline-ring/50;
@@ -255,33 +258,36 @@
   }
 
   .card-premium:hover {
-    background-color: var(--surface-hover);
-    transform: translateY(-2px);
-    border-color: rgba(5, 150, 105, 0.25);
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+    box-shadow: 0 2px 4px rgba(11, 18, 32, 0.05), 0 10px 24px rgba(11, 18, 32, 0.10);
   }
 
-  /* Primary Gradient Button */
+  /* Primary Button — solid brand, real elevation (no neon glow) */
   .btn-gradient {
-    background: var(--accent-gradient);
-    @apply text-white font-bold px-5 py-2.5 rounded-xl shadow-premium transition-all duration-300 cursor-pointer;
+    background: var(--accent);
+    @apply text-white font-bold px-5 py-2.5 transition-all duration-200 cursor-pointer;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgba(11, 18, 32, 0.10);
   }
 
   .btn-gradient:hover {
-    transform: translateY(-1px) scale(1.02);
-    filter: brightness(1.15);
-    box-shadow: 0 0 20px rgba(5, 150, 105, 0.4);
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
-  /* Gold Gradient Button */
+  /* Gold/Premium Button */
   .btn-gold {
-    background: var(--accent-gold-gradient);
-    @apply text-white font-bold px-5 py-2.5 rounded-xl shadow-premium transition-all duration-300 cursor-pointer;
+    background: var(--accent-gold);
+    @apply text-white font-bold px-5 py-2.5 transition-all duration-200 cursor-pointer;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgba(11, 18, 32, 0.10);
   }
 
   .btn-gold:hover {
-    transform: translateY(-1px) scale(1.02);
-    filter: brightness(1.1);
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
+    background: var(--accent-gold-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-gold) 35%, transparent);
   }
 
   /* Ghost Button */
@@ -387,9 +393,9 @@
     letter-spacing: 0.02em;
   }
   .auth-btn:hover:not(:disabled) {
-    filter: brightness(1.15);
+    background: var(--accent-hover);
     transform: translateY(-1px);
-    box-shadow: 0 0 24px rgba(5, 150, 105, 0.4);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
   }
   .auth-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 

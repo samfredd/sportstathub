@@ -46,3 +46,18 @@ Creator Analytics – For pundits, a dashboard displays performance: number of p
 4. Feedback and Iteration
 User feedback is integral to refining the UI. Early prototypes should be tested with a diverse group of Nigerian bettors and pundits to identify pain points, such as unclear labels or overloaded screens. Key metrics to monitor include click‑through rates, session duration, retention and conversion to paid tiers. Feedback loops will inform design tweaks, feature prioritisation and accessibility improvements.
 Adhering to the UI context described here will help create a coherent, engaging and accessible interface for the multi‑sport predictions platform.
+
+5. Design System (Tokens & Direction)
+
+Direction: "Bold sporty" (ESPN / 365Scores feel) — confident single brand colour, strong type hierarchy, rounded cards, real elevation. Avoid the generic "AI SaaS" look: no neon glow shadows, no rainbow of tinted accent colours, no terminal/techy branding.
+
+Source of truth: `frontend/src/app/globals.css` (CSS custom properties bridged to Tailwind via `@theme inline`). Always theme through these tokens — do not hardcode hex or use raw Tailwind palette colours (e.g. `bg-amber-500`, `text-purple-400`) for brand UI.
+
+- Brand accent — refined emerald: `--accent` `#00875A` (light) / `#12B981` (dark). Use for primary actions, links, active states. Not for decoration everywhere.
+- Premium/creator — deep gold: `--accent-gold` (`#B45309` light). Reserved for Pro/creator/EARN surfaces only.
+- Live — red `--live`; Win/Loss — `--success` / `--danger`. Colour carries meaning, not decoration.
+- Surfaces: light bg `#F1F3F6` + white cards; dark is a designed slate (`#0B0F17` bg / `#141A24` surface), not OLED black. Separate cards with `--shadow-premium` (layered soft elevation) + a 1px `--border`.
+- Radius: `--radius` `0.75rem` (rounded sporty cards).
+- Type: body = Inter (`--font-inter`), display/headings/scores = Archivo (`--font-archivo`), both loaded via `next/font` in `layout.tsx`. Headings are weight 800, slightly negative tracking. (Rajdhani was removed.)
+- Shadows are elevation only — never `box-shadow: 0 0 Npx <colour>` neon glows.
+- Telegram brand blue (`#0088cc`) is allowed only on the explicit "Join Telegram" ad slide.

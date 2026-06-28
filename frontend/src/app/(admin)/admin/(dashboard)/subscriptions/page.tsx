@@ -262,13 +262,13 @@ function PlanCard({ plan, onEdit, onToggleActive, onDelete }: {
 }) {
   const planColors: Record<string, string> = {
     free:       "from-muted/20 to-surface border-border/30",
-    pro:        "from-accent/10 to-purple-500/5 border-accent/30",
-    enterprise: "from-amber-500/10 to-orange-500/5 border-amber-500/30",
+    pro:        "from-accent/10 to-accent/5 border-accent/30",
+    enterprise: "from-accent-gold/10 to-accent-gold/5 border-accent-gold/30",
   };
   const accent: Record<string, string> = {
     free:       "text-muted",
     pro:        "text-accent",
-    enterprise: "text-amber-400",
+    enterprise: "text-accent-gold",
   };
 
   const colorKey = plan.slug in planColors ? plan.slug : "free";
@@ -288,7 +288,7 @@ function PlanCard({ plan, onEdit, onToggleActive, onDelete }: {
             <div className="text-base font-black text-foreground">{plan.display_name}</div>
             <div className="text-xs text-muted font-mono mt-0.5">{plan.slug}</div>
           </div>
-          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${plan.is_active ? "text-emerald-400 bg-emerald-500/10" : "text-muted bg-surface"}`}>
+          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${plan.is_active ? "text-success bg-success/10" : "text-muted bg-surface"}`}>
             {plan.is_active ? "Active" : "Inactive"}
           </span>
         </div>
@@ -310,7 +310,7 @@ function PlanCard({ plan, onEdit, onToggleActive, onDelete }: {
       <ul className="space-y-1.5 flex-1">
         {(plan.features ?? []).map((f, i) => (
           <li key={i} className="flex items-start gap-2 text-xs text-foreground/80 font-medium">
-            <CheckIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckIcon className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
             {f}
           </li>
         ))}
@@ -330,12 +330,12 @@ function PlanCard({ plan, onEdit, onToggleActive, onDelete }: {
         <button
           onClick={onToggleActive}
           className={`flex-1 py-2 glass rounded-xl text-xs font-bold border transition-all ${
-            plan.is_active ? "text-amber-400 border-amber-500/20 hover:bg-amber-500/10" : "text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10"
+            plan.is_active ? "text-accent-gold border-accent-gold/20 hover:bg-accent-gold/10" : "text-success border-success/20 hover:bg-success/10"
           }`}
         >
           {plan.is_active ? "Deactivate" : "Activate"}
         </button>
-        <button onClick={onDelete} className="py-2 px-3 glass rounded-xl text-xs font-bold text-rose-400 border border-rose-500/20 hover:bg-rose-500/10 transition-all">
+        <button onClick={onDelete} className="py-2 px-3 glass rounded-xl text-xs font-bold text-danger border border-danger/20 hover:bg-danger/10 transition-all">
           <TrashIcon className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -523,14 +523,14 @@ function SubscribersTab({ showToast }: { showToast: (m: string, t?: string) => v
     { key: "plan", label: "Plan", render: (r: any) => <PlanBadge plan={r.plan} plans={plans} /> },
     { key: "status", label: "Status", render: (r: any) => <StatusBadge status={r.status} /> },
     { key: "started_at", label: "Started", render: (r: any) => <span className="text-xs text-muted font-medium">{new Date(r.started_at).toLocaleDateString("en-GB")}</span> },
-    { key: "expires_at", label: "Expires", render: (r: any) => r.expires_at ? <span className={`text-xs font-medium ${new Date(r.expires_at) < new Date() ? "text-rose-400" : "text-muted"}`}>{new Date(r.expires_at).toLocaleDateString("en-GB")}</span> : <span className="text-muted/50 text-xs">Never</span> },
+    { key: "expires_at", label: "Expires", render: (r: any) => r.expires_at ? <span className={`text-xs font-medium ${new Date(r.expires_at) < new Date() ? "text-danger" : "text-muted"}`}>{new Date(r.expires_at).toLocaleDateString("en-GB")}</span> : <span className="text-muted/50 text-xs">Never</span> },
     {
       key: "actions", label: "Actions",
       render: (r: any) => (
         <div className="flex items-center gap-1.5">
           <button onClick={() => openEdit(r)} className="text-xs font-bold text-accent hover:underline px-2 py-1 rounded-lg hover:bg-accent/10 transition-all">Edit</button>
-          {r.status === "active" && <button onClick={() => handleCancel(r)} className="text-xs font-bold text-amber-400 hover:underline px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-all">Cancel</button>}
-          <button onClick={() => handleDelete(r)} className="text-xs font-bold text-rose-400 hover:underline px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all">Delete</button>
+          {r.status === "active" && <button onClick={() => handleCancel(r)} className="text-xs font-bold text-accent-gold hover:underline px-2 py-1 rounded-lg hover:bg-accent-gold/10 transition-all">Cancel</button>}
+          <button onClick={() => handleDelete(r)} className="text-xs font-bold text-danger hover:underline px-2 py-1 rounded-lg hover:bg-danger/10 transition-all">Delete</button>
         </div>
       ),
     },
@@ -610,15 +610,15 @@ function PlanBadge({ plan, plans }: { plan: string; plans: Plan[] }) {
   const found = plans.find((p) => p.slug === plan);
   const label = found?.display_name ?? plan;
   const styles: Record<string, string> = {
-    pro:        "text-purple-400 bg-purple-500/10",
-    enterprise: "text-amber-400 bg-amber-500/10",
+    pro:        "text-accent bg-accent/10",
+    enterprise: "text-accent-gold bg-accent-gold/10",
     free:       "text-muted bg-surface",
   };
   return <span className={`text-[11px] font-black px-2.5 py-1 rounded-full capitalize ${styles[plan] ?? styles.free}`}>{label}</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const s: Record<string, string> = { active: "text-emerald-400 bg-emerald-500/10", cancelled: "text-rose-400 bg-rose-500/10", expired: "text-muted/70 bg-surface" };
+  const s: Record<string, string> = { active: "text-success bg-success/10", cancelled: "text-danger bg-danger/10", expired: "text-muted/70 bg-surface" };
   return <span className={`text-[11px] font-black px-2.5 py-1 rounded-full capitalize ${s[status] ?? s.expired}`}>{status}</span>;
 }
 
@@ -645,7 +645,7 @@ function Modal({ title, onClose, children, wide = false }: any) {
 }
 
 function Toast({ msg, type }: { msg: string; type: string }) {
-  return <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"}`}>{msg}</div>;
+  return <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${type === "error" ? "bg-danger text-white" : "bg-success text-white"}`}>{msg}</div>;
 }
 
 function PlusIcon() { return <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }

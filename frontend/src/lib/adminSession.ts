@@ -1,4 +1,7 @@
-export const ADMIN_TOKEN_KEY = "token";
+// Namespaced away from the bare "token" key: the user session (session.ts)
+// purges localStorage "token" on every login/logout to clear legacy JWTs, which
+// would otherwise silently wipe a signed-in admin's token.
+export const ADMIN_TOKEN_KEY = "admin_token";
 export const ADMIN_COOKIE_NAME = "admin_token";
 
 export interface JwtPayload {

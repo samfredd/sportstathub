@@ -86,11 +86,11 @@ export default function H2HPage() {
     <div className="px-4 lg:px-6 py-12 font-sans space-y-8">
 
         {/* Hero */}
-        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-900 p-10 md:p-14">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.2),transparent_60%)]" />
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-800 p-10 md:p-14">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,135,90,0.22),transparent_60%)]" />
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 bg-white/10 border border-white/10 rounded-full px-3 py-1 mb-5">
-              <CrossIcon className="w-3 h-3 text-indigo-400" />
+              <CrossIcon className="w-3 h-3 text-accent" />
               <span className="text-[10px] text-white font-black uppercase tracking-widest">Comparison Engine</span>
             </div>
             <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none mb-3">Head-to-Head</h1>

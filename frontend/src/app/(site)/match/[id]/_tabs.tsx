@@ -374,12 +374,44 @@ function getRowStatScore(f: FormMatch, statType: StatTypeId, cache: StatsCache):
   return `${homeVal}-${awayVal}`;
 }
 
+// ─── Per-fixture stats fetching (throttled + capped) ──────────────────────────
+// Detailed stats (corners, cards, possession, …) live on each fixture, so the
+// form/H2H tables need one `/stats` call per match. Firing all ~40 at once
+// tripped API-Football's per-second burst limiter (429 / 500), leaving most
+// cells blank. We instead fetch with limited concurrency, filling rows in
+// progressively. The per-fixture results are cached across stat types, so the
+// fetch only happens once per match view regardless of which stat is selected.
+const STAT_FETCH_CAP = 20;          // matches the max "Last N" so every visible row fills
+const STAT_FETCH_CONCURRENCY = 4;   // simultaneous /stats requests — avoids the burst 429
+
+async function fetchFixtureStatsThrottled(
+  ids: number[],
+  onResult: (id: number, data: MatchStatsArr | null) => void,
+): Promise<void> {
+  const queue = [...ids];
+  const worker = async () => {
+    while (queue.length) {
+      const id = queue.shift()!;
+      try {
+        const res = await fetch(`${BASE}/api/matches/${id}/stats`, withAuth());
+        const json = res.ok ? await res.json() : null;
+        onResult(id, json?.data ?? null);
+      } catch {
+        onResult(id, null);
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(STAT_FETCH_CONCURRENCY, ids.length) }, worker),
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MatchAnalyticsTabs(props: MatchTabsProps) {
   const [tab, setTab] = useState<TabId>("form");
   const [statType, setStatType] = useState<StatTypeId>("goals");
-  const [lastN, setLastN] = useState<number>(5);
+  const [lastN, setLastN] = useState<number>(20);
   const [homeVenue, setHomeVenue] = useState<VenueFilter>("all");
   const [awayVenue, setAwayVenue] = useState<VenueFilter>("all");
 
@@ -539,30 +571,25 @@ function LastMatchesTab(props: LastMatchesTabProps) {
   useEffect(() => {
     if (statType === "goals") return; // goals come from FormMatch directly
 
-    const allMatches = [...filteredHome, ...filteredAway];
-    const toFetch = allMatches
-      .map(f => f.fixtureId)
+    // Cap per team so the total stays within the API budget even at "Last: 20".
+    const recentHome = filteredHome.slice(0, STAT_FETCH_CAP).map(f => f.fixtureId);
+    const recentAway = filteredAway.slice(0, STAT_FETCH_CAP).map(f => f.fixtureId);
+    const toFetch = [...recentHome, ...recentAway]
       .filter(id => id && !(id in statsCache) && !fetchingRef.current.has(id));
 
     if (!toFetch.length) return;
     toFetch.forEach(id => fetchingRef.current.add(id));
 
-    Promise.all(
-      toFetch.map(id =>
-        fetch(`${BASE}/api/matches/${id}/stats`, withAuth())
-          .then(r => r.ok ? r.json() : null)
-          .then(json => [id, json?.data ?? null] as [number, MatchStatsArr | null])
-          .catch(() => [id, null] as [number, null])
-      )
-    ).then(results => {
-      const patch: StatsCache = {};
-      results.forEach(([id, data]) => { patch[id] = data; fetchingRef.current.delete(id); });
-      setStatsCache(prev => ({ ...prev, ...patch }));
+    fetchFixtureStatsThrottled(toFetch, (id, data) => {
+      fetchingRef.current.delete(id);
+      setStatsCache(prev => ({ ...prev, [id]: data }));
     });
   }, [statType, filteredHome, filteredAway]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Only the capped (most-recent) sample is fetched, so loading reflects that set.
   const loadingStats = statType !== "goals" &&
-    [...filteredHome, ...filteredAway].some(f => f.fixtureId && !(f.fixtureId in statsCache));
+    [...filteredHome.slice(0, STAT_FETCH_CAP), ...filteredAway.slice(0, STAT_FETCH_CAP)]
+      .some(f => f.fixtureId && !(f.fixtureId in statsCache));
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
@@ -797,28 +824,21 @@ function H2HTab({ match, h2hStats, trend, lastN, statType }: MatchTabsProps & { 
     if (statType === "goals") return;
 
     const toFetch = played
+      .slice(0, STAT_FETCH_CAP)
       .map((f: any) => f.fixture?.id as number)
       .filter((id: number) => id && !(id in statsCache) && !fetchingRef.current.has(id));
 
     if (!toFetch.length) return;
     toFetch.forEach((id: number) => fetchingRef.current.add(id));
 
-    Promise.all(
-      toFetch.map((id: number) =>
-        fetch(`${BASE}/api/matches/${id}/stats`, withAuth())
-          .then(r => r.ok ? r.json() : null)
-          .then(json => [id, json?.data ?? null] as [number, MatchStatsArr | null])
-          .catch(() => [id, null] as [number, null])
-      )
-    ).then(results => {
-      const patch: StatsCache = {};
-      results.forEach(([id, data]) => { patch[id] = data; fetchingRef.current.delete(id); });
-      setStatsCache(prev => ({ ...prev, ...patch }));
+    fetchFixtureStatsThrottled(toFetch, (id, data) => {
+      fetchingRef.current.delete(id);
+      setStatsCache(prev => ({ ...prev, [id]: data }));
     });
   }, [statType, played]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadingStats = statType !== "goals" &&
-    played.some((f: any) => f.fixture?.id && !(f.fixture.id in statsCache));
+    played.slice(0, STAT_FETCH_CAP).some((f: any) => f.fixture?.id && !(f.fixture.id in statsCache));
 
   const statLabel = STAT_TYPES.find(s => s.id === statType)?.label ?? "Stat";
   const scoreHeader = statType === "goals" ? "SCORE" : statLabel.toUpperCase().slice(0, 5);

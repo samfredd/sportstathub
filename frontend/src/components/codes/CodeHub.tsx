@@ -249,7 +249,7 @@ function ConverterTab() {
       <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-accent/5 border border-accent/15">
         <span className="text-accent text-lg shrink-0">⚡</span>
         <p className="text-[11px] text-foreground/80 leading-relaxed">
-          <span className="font-black text-foreground">Live code translation</span> — resolves your full bet slip and generates a real booking code on the target platform. Supports <span className="text-emerald-400 font-bold">SportyBet</span> ↔ <span className="text-violet-400 font-bold">Bet9ja</span>. Results in 10–30 s.
+          <span className="font-black text-foreground">Live code translation</span> — resolves your full bet slip and generates a real booking code on the target platform. Supports <span className="text-accent font-bold">SportyBet</span> ↔ <span className="text-accent-gold font-bold">Bet9ja</span>. Results in 10–30 s.
         </p>
       </div>
 

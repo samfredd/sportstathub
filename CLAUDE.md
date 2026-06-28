@@ -148,3 +148,26 @@ meaningful implementation change.
 If implementation changes the architecture, scope, or
 standards documented in the context files, update the
 relevant file before continuing.
+
+## Design Context
+
+Before any UI work, read the design source of truth:
+
+- `PRODUCT.md` (root) — strategic: register (`product`),
+  users, purpose, brand personality, anti-references,
+  design principles, accessibility.
+- `DESIGN.md` (root) — visual system: tokens, colours,
+  typography, elevation, components, do's/don'ts.
+  North Star: **"The Confident Scoreboard."**
+
+Direction is **bold sporty, refined emerald**: one brand
+green (`#00875A`), gold for premium/creator only, red for
+live/loss only, real elevation (never neon glow), Archivo
+display + Inter body, designed dark slate (not OLED black).
+Explicitly avoid the generic AI-SaaS look, cluttered
+bookmaker aesthetics, bland gray data-tables, and casino
+gamification.
+
+The `impeccable` skill backs this: run `/impeccable <command>`
+(e.g. `audit`, `critique`, `polish`, `live`). A PostToolUse
+hook runs its design detector on every UI edit.

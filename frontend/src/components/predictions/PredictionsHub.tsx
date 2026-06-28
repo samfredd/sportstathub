@@ -456,23 +456,23 @@ function MonthCalendar({
 function ExpertPicksStrip({ picks }: { picks: CommunityPrediction[] }) {
   const STATUS_BAR: Record<string, string> = {
     open: "bg-accent",
-    won:  "bg-emerald-500",
-    lost: "bg-rose-500",
-    void: "bg-amber-500",
+    won:  "bg-success",
+    lost: "bg-danger",
+    void: "bg-accent-gold",
   };
   const STATUS_TEXT: Record<string, string> = {
     open: "text-accent bg-accent/10 border-accent/20",
-    won:  "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    lost: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-    void: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    won:  "text-success bg-success/10 border-success/20",
+    lost: "text-danger bg-danger/10 border-danger/20",
+    void: "text-accent-gold bg-accent-gold/10 border-accent-gold/20",
   };
 
   return (
     <div className="mb-8">
       <div className="flex items-center gap-3 mb-3">
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
-          <span className="text-amber-400 text-xs">★</span>
-          <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Expert Picks</span>
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-accent-gold/10 border border-accent-gold/20">
+          <span className="text-accent-gold text-xs">★</span>
+          <span className="text-[10px] font-black text-accent-gold uppercase tracking-widest">Expert Picks</span>
         </div>
         <span className="text-xs text-muted font-medium">Hand-picked by our analysts</span>
       </div>
@@ -483,14 +483,14 @@ function ExpertPicksStrip({ picks }: { picks: CommunityPrediction[] }) {
           const pred = p.prediction;
           return (
             <Link key={p.id} href={`/predictions/${p.id}`}
-              className="group glass border border-amber-500/20 hover:border-amber-500/40 rounded-2xl overflow-hidden transition-all hover:-translate-y-0.5 block">
+              className="group glass border border-accent-gold/20 hover:border-accent-gold/40 rounded-2xl overflow-hidden transition-all hover:-translate-y-0.5 block">
               <div className={`h-0.5 w-full ${STATUS_BAR[p.status] ?? "bg-accent"}`} />
               <div className="p-4">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-amber-400 text-xs">★</span>
-                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Expert</span>
-                    {p.isTrending && <span className="text-[10px] text-orange-400">🔥</span>}
+                    <span className="text-accent-gold text-xs">★</span>
+                    <span className="text-[10px] font-black text-accent-gold uppercase tracking-wider">Expert</span>
+                    {p.isTrending && <span className="text-[10px] text-accent-gold">🔥</span>}
                   </div>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border capitalize ${STATUS_TEXT[p.status] ?? STATUS_TEXT.open}`}>
                     {p.status}
@@ -726,7 +726,7 @@ function AiPredict() {
 
       {/* Error */}
       {error && (
-        <div className="glass border border-rose-500/20 rounded-2xl p-4 text-sm text-rose-400 font-medium flex items-center gap-3">
+        <div className="glass border border-danger/20 rounded-2xl p-4 text-sm text-danger font-medium flex items-center gap-3">
           <span className="shrink-0">⚠</span> {error}
         </div>
       )}
@@ -837,17 +837,17 @@ function TipsList({ predictions, state }: { predictions: CommunityPrediction[]; 
               <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border shadow-sm text-base">{sportIcon}</div>
               <span className="text-[11px] text-muted font-bold uppercase tracking-widest">{leagueName}</span>
               {isExpert && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider rounded-md">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-gold/15 border border-accent-gold/30 text-accent-gold text-[10px] font-black uppercase tracking-wider rounded-md">
                   ★ Expert Pick
                 </span>
               )}
               {prediction.isTrending && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-500/15 border border-orange-500/30 text-orange-400 text-[10px] font-black uppercase tracking-wider rounded-md animate-pulse-live">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-gold/15 border border-accent-gold/30 text-accent-gold text-[10px] font-black uppercase tracking-wider rounded-md animate-pulse-live">
                   🔥 Trending
                 </span>
               )}
               {prediction.isPremium && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[10px] font-black uppercase tracking-wider rounded-md">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-gold/15 border border-accent-gold/30 text-accent-gold text-[10px] font-black uppercase tracking-wider rounded-md">
                   ★ Premium
                 </span>
               )}
@@ -933,7 +933,7 @@ function TipsList({ predictions, state }: { predictions: CommunityPrediction[]; 
           <div className="flex items-center justify-between gap-3 pt-4 border-t border-border/40">
             <div className="flex items-center gap-2.5">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black border ${
-                isExpert ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-gradient-to-br from-accent/20 to-accent/5 border-accent/20 text-accent"
+                isExpert ? "bg-accent-gold/10 border-accent-gold/20 text-accent-gold" : "bg-gradient-to-br from-accent/20 to-accent/5 border-accent/20 text-accent"
               }`}>
                 {isExpert ? "★" : (prediction.creator?.name?.[0] ?? "?")}
               </div>

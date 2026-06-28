@@ -6,12 +6,12 @@ import { standingToRank } from "@/lib/transforms";
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 const LEAGUES = [
-  { id: 39,  name: "Premier League",   country: "England",  flag: "ENG", color: "from-indigo-600 to-sky-700" },
-  { id: 140, name: "La Liga",          country: "Spain",    flag: "ESP", color: "from-red-600 to-amber-600" },
-  { id: 135, name: "Serie A",          country: "Italy",    flag: "ITA", color: "from-blue-600 to-cyan-700" },
-  { id: 78,  name: "Bundesliga",       country: "Germany",  flag: "GER", color: "from-red-700 to-yellow-600" },
-  { id: 61,  name: "Ligue 1",          country: "France",   flag: "FRA", color: "from-blue-700 to-emerald-600" },
-  { id: 2,   name: "Champions League", country: "Europe",   flag: "UCL", color: "from-sky-700 to-indigo-800" },
+  { id: 39,  name: "Premier League",   country: "England",  flag: "ENG" },
+  { id: 140, name: "La Liga",          country: "Spain",    flag: "ESP" },
+  { id: 135, name: "Serie A",          country: "Italy",    flag: "ITA" },
+  { id: 78,  name: "Bundesliga",       country: "Germany",  flag: "GER" },
+  { id: 61,  name: "Ligue 1",          country: "France",   flag: "FRA" },
+  { id: 2,   name: "Champions League", country: "Europe",   flag: "UCL" },
 ];
 
 const STAT_METRIC_GROUPS = [
@@ -372,8 +372,8 @@ export default function RankingsPage() {
 
             {mode === "standings" ? (
               <>
-                <div className={`relative rounded-3xl overflow-hidden h-36 bg-gradient-to-r ${league.color}`}>
-                  <div className="absolute inset-0 bg-black/30" />
+                <div className="relative rounded-3xl overflow-hidden h-36 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-800">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,135,90,0.25),transparent_65%)]" />
                   <div className="relative h-full flex items-center justify-between px-6 sm:px-8 gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-3 mb-2">

@@ -192,8 +192,8 @@ export default function AdminUsersPage() {
     {
       key: "is_verified", label: "Verified",
       render: (row) => row.is_verified
-        ? <span className="text-[11px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">Verified</span>
-        : <span className="text-[11px] font-black text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-full">Pending</span>,
+        ? <span className="text-[11px] font-black text-success bg-success/10 px-2.5 py-1 rounded-full">Verified</span>
+        : <span className="text-[11px] font-black text-danger bg-danger/10 px-2.5 py-1 rounded-full">Pending</span>,
     },
     {
       key: "subscription_plan", label: "Plan",
@@ -204,7 +204,7 @@ export default function AdminUsersPage() {
     {
       key: "oauth_provider", label: "Auth",
       render: (row) => row.oauth_provider
-        ? <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full capitalize">{row.oauth_provider}</span>
+        ? <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-full capitalize">{row.oauth_provider}</span>
         : <span className="text-xs text-muted font-medium">Email</span>,
     },
     {
@@ -223,7 +223,7 @@ export default function AdminUsersPage() {
           </button>
           <button
             onClick={() => handleDelete(row)}
-            className="text-xs font-bold text-rose-400 hover:underline px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all"
+            className="text-xs font-bold text-danger hover:underline px-2 py-1 rounded-lg hover:bg-danger/10 transition-all"
           >
             Delete
           </button>
@@ -272,19 +272,19 @@ export default function AdminUsersPage() {
           <span className="font-black text-foreground">{selected.size} selected</span>
           <button
             onClick={handleBulkSuspend}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-accent-gold bg-accent-gold/10 hover:bg-accent-gold/20 transition-all"
           >
             Suspend
           </button>
           <button
             onClick={handleBulkUnsuspend}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-success bg-success/10 hover:bg-success/20 transition-all"
           >
             Unsuspend
           </button>
           <button
             onClick={handleBulkDelete}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-danger bg-danger/10 hover:bg-danger/20 transition-all"
           >
             Delete Selected
           </button>
@@ -372,7 +372,7 @@ export default function AdminUsersPage() {
 // ─── Sub-components ─────────────────────────────────────────
 function RoleBadge({ role }) {
   if (role === "admin") {
-    return <span className="text-[11px] font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full">Admin</span>;
+    return <span className="text-[11px] font-black text-accent-gold bg-accent-gold/10 px-2.5 py-1 rounded-full">Admin</span>;
   }
   if (role === "creator") {
     return <span className="text-[11px] font-black text-accent bg-accent/10 px-2.5 py-1 rounded-full">Creator</span>;
@@ -382,18 +382,18 @@ function RoleBadge({ role }) {
 
 function StatusBadge({ status }) {
   if (status === "suspended") {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-orange-400 bg-orange-500/10 border-orange-500/20">Suspended</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-accent-gold bg-accent-gold/10 border-accent-gold/20">Suspended</span>;
   }
   if (status === "banned") {
-    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-rose-400 bg-rose-500/10 border-rose-500/20">Banned</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-danger bg-danger/10 border-danger/20">Banned</span>;
   }
-  return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Active</span>;
+  return <span className="px-2 py-0.5 rounded-full text-[10px] font-black border text-success bg-success/10 border-success/20">Active</span>;
 }
 
 function PlanBadge({ plan }) {
   const styles = {
-    pro:        "text-purple-400 bg-purple-500/10",
-    enterprise: "text-amber-400 bg-amber-500/10",
+    pro:        "text-accent bg-accent/10",
+    enterprise: "text-accent-gold bg-accent-gold/10",
     free:       "text-muted bg-surface",
   };
   return (
@@ -431,7 +431,7 @@ function Modal({ title, onClose, children }) {
 function Toast({ msg, type }) {
   return (
     <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl text-sm font-bold animate-in slide-in-from-bottom duration-300 ${
-      type === "error" ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
+      type === "error" ? "bg-danger text-white" : "bg-success text-white"
     }`}>
       {msg}
     </div>
