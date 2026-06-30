@@ -190,8 +190,8 @@ services:
       - -c
       - |
         until pg_isready -h db -U project; do sleep 1; done
-        psql -h db -U project -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'oddswitch'" | grep -q 1 || \
-          psql -h db -U project -d postgres -c "CREATE DATABASE oddswitch"
+        psql -h db -U project -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'oddswitch'" 2>/dev/null | grep -q 1 || \
+          psql -h db -U project -d postgres -c "CREATE DATABASE oddswitch" 2>/dev/null || true
     depends_on:
       db:
         condition: service_healthy

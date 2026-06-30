@@ -474,6 +474,18 @@ jobs:
             export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
             export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
 
+            # Sync the Postgres user password to match the current DB_PASSWORD secret.
+            # Required because POSTGRES_PASSWORD is only used on first-init; if the data
+            # volume already existed from a deploy where DB_PASSWORD was empty, the
+            # password stays blank and every subsequent psql auth fails (exit 2).
+            DB_CONTAINER="$(docker compose -f docker-compose.prod.yml ps -q db 2>/dev/null || true)"
+            if [ -n "$DB_CONTAINER" ]; then
+              docker exec "$DB_CONTAINER" \
+                psql -U project -d postgres \
+                -c "ALTER USER project WITH PASSWORD '${DB_PASSWORD}'" \
+                2>/dev/null && echo "DB password synced." || echo "Warning: DB password sync skipped — container not ready yet."
+            fi
+
             docker network inspect web >/dev/null 2>&1 || docker network create web
             AVAILABLE_SERVICES="$(docker compose -f docker-compose.prod.yml config --services)"
             DEPLOY_SERVICES=""
