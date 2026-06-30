@@ -378,7 +378,9 @@ jobs:
           APP_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           APP_GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
           APP_FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          APP_DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           APP_ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          APP_SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
           APP_OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL || 'http://ollama:11434' }}
           APP_OLLAMA_MODEL: ${{ secrets.OLLAMA_MODEL || 'qwen2.5:1.5b' }}
           APP_ADMIN_INVITE_KEY: ${{ secrets.ADMIN_INVITE_KEY }}
@@ -406,7 +408,7 @@ jobs:
             APP_PORT,APP_HOST,APP_LOG_LEVEL,APP_SECRET_KEY,APP_JWT_EXPIRATION,
             APP_DATABASE_URL,APP_CORS_ORIGIN,APP_REDIS_HOST,APP_REDIS_PORT,APP_REDIS_PASSWORD,
             APP_GOOGLE_CLIENT_ID,APP_GOOGLE_CLIENT_SECRET,APP_GOOGLE_REDIRECT_URI,
-            APP_FOOTBALL_API_KEY,APP_ODDS_API_KEY,
+            APP_DB_PASSWORD,APP_FOOTBALL_API_KEY,APP_ODDS_API_KEY,APP_SPORTS_API_KEY,
             APP_OLLAMA_BASE_URL,APP_OLLAMA_MODEL,
             APP_ADMIN_INVITE_KEY,APP_REQUIRE_OTP,
             APP_SMTP_HOST,APP_SMTP_PORT,APP_SMTP_SECURE,APP_SMTP_USER,APP_SMTP_PASS,
@@ -445,7 +447,9 @@ jobs:
               printf 'GOOGLE_CLIENT_ID=%s\n'      "${APP_GOOGLE_CLIENT_ID}"
               printf 'GOOGLE_CLIENT_SECRET=%s\n'  "${APP_GOOGLE_CLIENT_SECRET}"
               printf 'GOOGLE_REDIRECT_URI=%s\n'   "${APP_GOOGLE_REDIRECT_URI}"
+              printf 'DB_PASSWORD=%s\n'            "${APP_DB_PASSWORD}"
               printf 'FOOTBALL_API_KEY=%s\n'      "${APP_FOOTBALL_API_KEY}"
+              printf 'SPORTS_API_KEY=%s\n'        "${APP_SPORTS_API_KEY}"
               printf 'ODDS_API_KEY=%s\n'          "${APP_ODDS_API_KEY}"
               printf 'OLLAMA_BASE_URL=%s\n'       "${APP_OLLAMA_BASE_URL}"
               printf 'OLLAMA_MODEL=%s\n'          "${APP_OLLAMA_MODEL}"
