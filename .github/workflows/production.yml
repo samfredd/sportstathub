@@ -431,6 +431,19 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GHCR_USER" --password-stdin
 
+            # Single source of truth for the DB password. compose interpolates
+            # ${DB_PASSWORD} into every Postgres connection string (backend + oddswitch),
+            # so it must be non-empty and consistent. If no standalone DB_PASSWORD secret
+            # was supplied, parse it out of DATABASE_URL (postgres://user:PASSWORD@host/db).
+            APP_DB_PASSWORD="${APP_DB_PASSWORD:-}"
+            if [ -z "$APP_DB_PASSWORD" ] && [ -n "${APP_DATABASE_URL:-}" ]; then
+              APP_DB_PASSWORD="$(printf '%s' "$APP_DATABASE_URL" | sed -E 's#^[a-zA-Z+]+://[^:]+:([^@]*)@.*#\1#')"
+            fi
+            if [ -z "$APP_DB_PASSWORD" ]; then
+              echo "ERROR: DB_PASSWORD is empty — set the DB_PASSWORD secret or include the password in DATABASE_URL." >&2
+              exit 1
+            fi
+
             # Write .env from GitHub Secrets — the server no longer needs a manually
             # maintained env file. All values flow through GitHub → CI → here.
             {
@@ -474,19 +487,23 @@ jobs:
             export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
             export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
 
-            # Sync the Postgres user password to match the current DB_PASSWORD secret.
-            # Required because POSTGRES_PASSWORD is only used on first-init; if the data
-            # volume already existed from a deploy where DB_PASSWORD was empty, the
-            # password stays blank and every subsequent psql auth fails (exit 2).
+            docker network inspect web >/dev/null 2>&1 || docker network create web
+
+            # Sync the Postgres user password to match DB_PASSWORD on every deploy.
+            # POSTGRES_PASSWORD only applies on first-init; if the volume already exists
+            # (initialized with a different/blank password), psql auth fails (exit 2).
+            # Local socket connections inside the container use trust auth, so this ALTER
+            # needs no password. Runs against the still-running db from the previous deploy.
             DB_CONTAINER="$(docker compose -f docker-compose.prod.yml ps -q db 2>/dev/null || true)"
             if [ -n "$DB_CONTAINER" ]; then
-              docker exec "$DB_CONTAINER" \
-                psql -U project -d postgres \
-                -c "ALTER USER project WITH PASSWORD '${DB_PASSWORD}'" \
-                2>/dev/null && echo "DB password synced." || echo "Warning: DB password sync skipped — container not ready yet."
+              if docker exec "$DB_CONTAINER" psql -U project -d postgres \
+                   -c "ALTER USER project WITH PASSWORD '${DB_PASSWORD}'"; then
+                echo "DB password synced to DB_PASSWORD."
+              else
+                echo "ERROR: failed to sync Postgres password — aborting before downstream auth failures." >&2
+                exit 1
+              fi
             fi
-
-            docker network inspect web >/dev/null 2>&1 || docker network create web
             AVAILABLE_SERVICES="$(docker compose -f docker-compose.prod.yml config --services)"
             DEPLOY_SERVICES=""
             for service in traefik backend frontend ai-service oddswitch-api oddswitch-worker oddswitch-browser-worker; do
