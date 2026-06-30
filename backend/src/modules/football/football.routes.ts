@@ -35,6 +35,43 @@ async function footballRoutes(fastify) {
 
   // Matches
   fastify.get('/api/matches/live', { ...cache(30) }, ctrl.getLiveMatches);
+
+  // Server-Sent Events — pushes live fixture updates every 30 s without polling.
+  // Rate limiting is disabled: this is one long-lived connection, not repeated requests.
+  // X-Accel-Buffering: no disables Nginx/Traefik response buffering so chunks flush immediately.
+  fastify.get('/api/matches/live/stream', { config: { rateLimit: false } as any }, async (request, reply) => {
+    const { sport } = request.query as { sport?: string };
+
+    reply.hijack();
+    const res = reply.raw;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    // Allow CORS for SSE (same origin set applies as the rest of the API)
+    const origin = (request.headers.origin as string) || '';
+    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.writeHead(200);
+
+    let closed = false;
+
+    const push = async () => {
+      if (closed || res.destroyed) return;
+      try {
+        const data = await footballService.getLiveMatches(sport);
+        res.write(`data: ${JSON.stringify({ data })}\n\n`);
+      } catch { /* non-fatal — client keeps last state */ }
+    };
+
+    await push(); // send immediately on connect
+    const interval = setInterval(push, 30_000);
+
+    request.raw.on('close', () => {
+      closed = true;
+      clearInterval(interval);
+      if (!res.destroyed) res.end();
+    });
+  });
   fastify.get('/api/matches', { ...cache(60), schema: { querystring: matchesQuerySchema } }, ctrl.getMatches);
   fastify.get('/api/matches/:id', { ...cache(30), schema: { params: matchParamSchema } }, ctrl.getMatchById);
   fastify.get('/api/matches/:id/stats', { ...cache(60), schema: { params: matchParamSchema } }, ctrl.getMatchStats);

@@ -151,12 +151,20 @@ export default function Home() {
     queueMicrotask(fetchMatches);
   }, [fetchMatches]);
 
-  // Auto-refresh live matches every 30 s so "live feed" actually stays live
+  // Live tab: subscribe to SSE stream instead of polling every 30 s.
+  // EventSource auto-reconnects on drop; no setInterval needed.
   useEffect(() => {
-    if (activeTab !== "live") return;
-    const id = setInterval(fetchMatches, 30_000);
-    return () => clearInterval(id);
-  }, [activeTab, fetchMatches]);
+    if (activeTab !== "live" || isSportComingSoon(activeSport)) return;
+    const es = new EventSource(`${BASE}/api/matches/live/stream?sport=${activeSport}`);
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        setMatches((payload.data ?? []).map(fixtureToMatch).filter(Boolean));
+        setLoading(false);
+      } catch {}
+    };
+    return () => es.close();
+  }, [activeTab, activeSport]);
 
   // Close sport dropdown on outside click
   useEffect(() => {

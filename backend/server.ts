@@ -5,6 +5,8 @@ import rateLimit from "@fastify/rate-limit";
 import rawBody from "fastify-raw-body";
 import helmet from "@fastify/helmet";
 import cookie from "@fastify/cookie";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 
 import config from "./src/config/env.config.js";
 import infrastructure from "./src/config/db.js";
@@ -29,6 +31,11 @@ import billingRoutes from "./src/modules/billing/billing.routes.js";
 const isProd = process.env.NODE_ENV === "production";
 
 const server = fastify({
+  // Behind Traefik (TLS termination) the backend only ever receives forwarded
+  // requests, so trust X-Forwarded-* — without this Fastify treats every request
+  // as internal http, which breaks https detection, secure cookies, and the
+  // Google OAuth state/PKCE cookie round-trip on the callback.
+  trustProxy: true,
   logger: isProd
     ? { level: process.env.LOG_LEVEL ?? "warn" }
     : {
@@ -58,6 +65,25 @@ server.setErrorHandler((error: any, request, reply) => {
   }
   return reply.status(statusCode).send({ status: "error", error: error.message });
 });
+
+// OpenAPI spec — register before routes so Fastify collects schemas as routes load.
+// Serves /openapi.json; /docs renders the Swagger UI (dev + staging only).
+await server.register(swagger, {
+  openapi: {
+    openapi: "3.0.0",
+    info: {
+      title: "SportStatHub API",
+      description: "Football analytics platform — fixtures, standings, H2H, predictions",
+      version: "1.0.0",
+    },
+  },
+});
+if (!isProd) {
+  await server.register(swaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: { docExpansion: "list", filter: true },
+  });
+}
 
 // Infrastructure (DB + Redis) — must be first
 await server.register(infrastructure);
