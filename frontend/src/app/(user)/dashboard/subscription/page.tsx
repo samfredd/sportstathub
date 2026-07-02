@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { communityApi } from "@/lib/communityApi";
-import { billingApi } from "@/lib/billingApi";
+import { billingApi, type PaymentRecord } from "@/lib/billingApi";
 import { DISPLAY_CURRENCIES, useDisplayCurrency } from "@/lib/currency";
 
 interface Profile {
@@ -29,6 +29,8 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [history, setHistory] = useState<PaymentRecord[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const { currency: displayCurrency, setCurrency: setDisplayCurrency, formatUsd, liveRates } = useDisplayCurrency();
   const [message, setMessage] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -59,12 +61,32 @@ export default function SubscriptionPage() {
 
     let mounted = true;
 
-    billingApi.verifyPaystack(reference)
+    // 409 means the Paystack webhook is verifying this payment concurrently —
+    // wait briefly and retry once before reading the profile (webhook usually
+    // finishes within a second or two).
+    async function verifyWithRetry() {
+      try {
+        await billingApi.verifyPaystack(reference);
+      } catch (error: any) {
+        if (error?.status !== 409) throw error;
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          await billingApi.verifyPaystack(reference);
+        } catch (retryError: any) {
+          if (retryError?.status !== 409) throw retryError;
+          // Still processing — the webhook owns it; profile refresh below
+          // will pick up the activated subscription.
+        }
+      }
+    }
+
+    verifyWithRetry()
       .then(() => communityApi.getMe())
       .then((nextProfile) => {
         if (!mounted) return;
         setProfile(nextProfile);
         setMessage("Payment confirmed. Your subscription is active.");
+        setHistoryLoaded(false); // refresh the payment history list
       })
       .catch((error) => {
         if (!mounted) return;
@@ -80,6 +102,16 @@ export default function SubscriptionPage() {
 
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (historyLoaded) return;
+    let mounted = true;
+    billingApi.getHistory()
+      .then((rows) => { if (mounted) setHistory(Array.isArray(rows) ? rows : []); })
+      .catch(() => {})
+      .finally(() => { if (mounted) setHistoryLoaded(true); });
+    return () => { mounted = false; };
+  }, [historyLoaded]);
 
   const currentPlan = profile?.subscription_plan || "free";
   const expires = profile?.subscription_expires_at
@@ -276,7 +308,63 @@ export default function SubscriptionPage() {
           )}
         </div>
       </div>
+
+      {/* Payment history */}
+      {historyLoaded && history.length > 0 && (
+        <div className="glass rounded-2xl p-6 border border-border/30">
+          <p className="text-[11px] font-black text-muted uppercase tracking-widest mb-4">Payment History</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] font-black text-muted uppercase tracking-wider border-b border-border/30">
+                  <th className="pb-2 pr-4">Date</th>
+                  <th className="pb-2 pr-4">Plan</th>
+                  <th className="pb-2 pr-4">Amount</th>
+                  <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2">Reference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {history.map((p) => (
+                  <tr key={p.id}>
+                    <td className="py-2.5 pr-4 text-foreground font-medium whitespace-nowrap">
+                      {new Date(p.paid_at ?? p.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="py-2.5 pr-4 text-foreground font-bold capitalize whitespace-nowrap">
+                      {p.plan} <span className="text-muted font-medium">· {p.billing_interval}</span>
+                    </td>
+                    <td className="py-2.5 pr-4 text-foreground font-bold whitespace-nowrap tabular-nums">
+                      {new Intl.NumberFormat("en-US", { style: "currency", currency: p.currency || "USD" }).format(p.amount)}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      <PaymentStatusBadge status={p.status} />
+                    </td>
+                    <td className="py-2.5 text-muted font-mono text-[11px] truncate max-w-[160px]" title={p.reference}>
+                      {p.reference}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function PaymentStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    success:    "bg-success/10 text-success border-success/20",
+    pending:    "bg-accent-gold/10 text-accent-gold border-accent-gold/20",
+    processing: "bg-accent-gold/10 text-accent-gold border-accent-gold/20",
+    failed:     "bg-danger/10 text-danger border-danger/20",
+    abandoned:  "bg-surface text-muted border-border/30",
+  };
+  return (
+    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${styles[status] ?? styles.abandoned}`}>
+      {status}
+    </span>
   );
 }
 

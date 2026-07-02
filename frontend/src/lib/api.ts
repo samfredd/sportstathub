@@ -1,5 +1,3 @@
-import { getAuthHeaders } from "@/lib/authHeaders";
-
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface FetchOptions extends RequestInit {
@@ -23,7 +21,6 @@ async function get(path: string, params: Params = {}, fetchOpts: FetchOptions = 
     credentials: "include", // send the httpOnly auth cookie
     ...rest,
     headers: {
-      ...getAuthHeaders(),
       ...(rest.headers as Record<string, string> | undefined),
     },
   });

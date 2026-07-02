@@ -45,6 +45,19 @@ function makeRepo(overrides: Record<string, any> = {}) {
         status: 'pending',
       };
     },
+    async claimPaymentForProcessing(reference: string) {
+      calls.push({ method: 'claimPaymentForProcessing', reference });
+      return {
+        id: 10,
+        user_id: 7,
+        plan: 'pro',
+        billing_interval: 'monthly',
+        reference,
+        amount: '9.99',
+        currency: 'USD',
+        status: 'processing',
+      };
+    },
     async markPaymentStatus(reference: string, payload: any) {
       calls.push({ method: 'markPaymentStatus', reference, payload });
       return { reference, ...payload };
@@ -151,4 +164,53 @@ test('verifyPayment rejects mismatched Paystack amount without activating subscr
   );
 
   assert.equal(repo.calls.some((call) => call.method === 'activateSubscription'), false);
+});
+
+test('verifyPayment reports 409 when another caller holds the processing claim', async () => {
+  const repo = makeRepo({
+    async claimPaymentForProcessing() {
+      return null; // claim lost — webhook/verify race
+    },
+  });
+  const paystack = makePaystack();
+  const service = createBillingService({ repo, paystack });
+
+  await assert.rejects(
+    () => service.verifyPayment({ id: 7 }, 'pst_pro_abc'),
+    (err: any) => err.statusCode === 409
+  );
+
+  assert.equal(repo.calls.some((call) => call.method === 'activateSubscription'), false);
+  assert.equal(paystack.calls.length, 0); // never hit Paystack without the claim
+});
+
+test('verifyPayment returns the settled payment when the race winner already succeeded', async () => {
+  let lookups = 0;
+  const repo = makeRepo({
+    async findPaymentByReference(reference: string) {
+      lookups += 1;
+      // First lookup: pre-claim read (pending). Second: post-claim-loss read (success).
+      return {
+        id: 10,
+        user_id: 7,
+        plan: 'pro',
+        billing_interval: 'monthly',
+        reference,
+        amount: '9.99',
+        currency: 'USD',
+        status: lookups === 1 ? 'pending' : 'success',
+        subscription_id: lookups === 1 ? null : 42,
+      };
+    },
+    async claimPaymentForProcessing() {
+      return null; // webhook won the race and finished
+    },
+  });
+  const paystack = makePaystack();
+  const service = createBillingService({ repo, paystack });
+
+  const result = await service.verifyPayment({ id: 7 }, 'pst_pro_abc');
+  assert.equal(result.payment.status, 'success');
+  assert.equal(result.subscription.plan, 'pro');
+  assert.equal(paystack.calls.length, 0);
 });

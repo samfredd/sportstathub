@@ -75,6 +75,10 @@ export default function ForumThreadPage() {
     try {
       const updated = await communityApi.likeThread(thread.id);
       setThread(updated);
+    } catch (err: any) {
+      if (err?.status === 401) {
+        window.location.href = `/auth/login?redirect=/forum/${thread.id}`;
+      }
     } finally {
       setLiking(false);
     }

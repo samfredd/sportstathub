@@ -18,9 +18,16 @@ export function createBillingController(service) {
     return ok(reply, data);
   }
 
+  async function listHistory(request, reply) {
+    const { limit = 20, offset = 0 } = request.query || {};
+    const data = await service.listPayments(request.user, { limit, offset });
+    return ok(reply, data);
+  }
+
   return {
     listPlans,
     initializePaystack,
     verifyPaystack,
+    listHistory,
   };
 }

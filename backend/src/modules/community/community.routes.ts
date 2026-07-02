@@ -67,6 +67,7 @@ async function communityRoutes(fastify) {
   }, ctrl.createPrediction);
 
   fastify.post('/api/predictions/:id/like', {
+    onRequest: [fastify.authenticate],
     schema: { params: interactionParamSchema },
   }, ctrl.likePrediction);
 
@@ -96,6 +97,7 @@ async function communityRoutes(fastify) {
   }, ctrl.createThread);
 
   fastify.post('/api/forum/threads/:id/like', {
+    onRequest: [fastify.authenticate],
     schema: { params: interactionParamSchema },
   }, ctrl.likeThread);
 
@@ -110,6 +112,7 @@ async function communityRoutes(fastify) {
   }, ctrl.createComment);
 
   fastify.post('/api/comments/:id/like', {
+    onRequest: [fastify.authenticate],
     schema: { params: interactionParamSchema },
   }, ctrl.likeComment);
 

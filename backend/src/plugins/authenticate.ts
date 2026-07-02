@@ -41,10 +41,21 @@ async function authenticatePlugin(fastify) {
   fastify.decorate('authenticate', verifyAndLoadUser);
   fastify.decorate('requireAuth', verifyAndLoadUser);
 
-  fastify.decorate('optionalAuth', async function (request, reply) {
-    const authorization = request.headers?.authorization;
-    if (!authorization) return;
-    return verifyAndLoadUser(request, reply);
+  // Optional auth: attach the user when a credential is present (httpOnly
+  // cookie or Authorization header) but NEVER reject the request — public
+  // routes must keep working for anonymous visitors and stale/expired tokens.
+  fastify.decorate('optionalAuth', async function (request, _reply) {
+    const hasCredential = request.headers?.authorization || request.cookies?.token;
+    if (!hasCredential) return;
+    try {
+      await request.jwtVerify();
+      const currentUser = await loadCurrentUser(Number(request.user?.id));
+      request.user = (currentUser && (!currentUser.status || currentUser.status === 'active'))
+        ? currentUser
+        : null;
+    } catch {
+      request.user = null;
+    }
   });
 
   fastify.decorate('requireAdmin', async function (request, reply) {

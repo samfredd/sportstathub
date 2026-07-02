@@ -50,6 +50,38 @@ export function createBillingRepository(db) {
     return rows[0] ?? null;
   }
 
+  async function findPaymentsByUser(userId: number, { limit = 20, offset = 0 } = {}) {
+    const { rows } = await db.query(
+      `SELECT id, reference, plan, billing_interval, amount, currency, status,
+              paid_at, created_at
+       FROM payment_transactions
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+    return rows;
+  }
+
+  // Atomically claim a payment for verification. Only one concurrent caller
+  // (user-initiated verify vs. Paystack webhook) wins; the loser sees 0 rows.
+  // A 'processing' claim older than 2 minutes is reclaimable so a crash
+  // mid-verification can't permanently strand the payment.
+  async function claimPaymentForProcessing(reference: string) {
+    const { rows } = await db.query(
+      `UPDATE payment_transactions
+       SET status = 'processing', updated_at = NOW()
+       WHERE reference = $1
+         AND (
+           status IN ('pending', 'failed', 'abandoned')
+           OR (status = 'processing' AND updated_at < NOW() - INTERVAL '2 minutes')
+         )
+       RETURNING *`,
+      [reference]
+    );
+    return rows[0] ?? null;
+  }
+
   async function markPaymentStatus(reference: string, { status, providerPayload, paidAt, subscriptionId = null }) {
     const { rows } = await db.query(
       `UPDATE payment_transactions
@@ -99,6 +131,8 @@ export function createBillingRepository(db) {
     findActivePlanBySlug,
     createPaymentTransaction,
     findPaymentByReference,
+    findPaymentsByUser,
+    claimPaymentForProcessing,
     markPaymentStatus,
     findSubscriptionById,
     activateSubscription,

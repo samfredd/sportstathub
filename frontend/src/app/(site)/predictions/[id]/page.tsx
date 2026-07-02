@@ -64,6 +64,10 @@ export default function PredictionDetailPage() {
     try {
       const updated = await communityApi.likePrediction(prediction.id);
       setPrediction(updated);
+    } catch (err: any) {
+      if (err?.status === 401) {
+        window.location.href = `/auth/login?redirect=/predictions/${prediction.id}`;
+      }
     } finally {
       setLiking(false);
     }

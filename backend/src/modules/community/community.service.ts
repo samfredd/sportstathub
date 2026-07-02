@@ -176,22 +176,22 @@ export function createCommunityService(repo, footballService?) {
     };
   }
 
-  async function likePrediction(id) {
-    const row = await repo.incrementPredictionLike(id);
-    if (!row) throw notFound('Prediction not found');
-    return mapPrediction(row);
+  async function likePrediction(id, userId: number) {
+    const result = await repo.togglePredictionLike(userId, id);
+    if (!result) throw notFound('Prediction not found');
+    return { ...mapPrediction(result.row), liked: result.liked };
   }
 
-  async function likeThread(id) {
-    const row = await repo.incrementThreadLike(id);
-    if (!row) throw notFound('Thread not found');
-    return mapThread(row);
+  async function likeThread(id, userId: number) {
+    const result = await repo.toggleThreadLike(userId, id);
+    if (!result) throw notFound('Thread not found');
+    return { ...mapThread(result.row), liked: result.liked };
   }
 
-  async function likeComment(id) {
-    const row = await repo.incrementCommentLike(id);
-    if (!row) throw notFound('Comment not found');
-    return mapComment(row);
+  async function likeComment(id, userId: number) {
+    const result = await repo.toggleCommentLike(userId, id);
+    if (!result) throw notFound('Comment not found');
+    return { ...mapComment(result.row), liked: result.liked };
   }
 
   async function toggleFollow(followerId: number, creatorId: number) {

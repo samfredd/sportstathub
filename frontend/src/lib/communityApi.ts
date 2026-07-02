@@ -26,7 +26,9 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
 
   const json = await res.json().catch(() => ({})) as Record<string, unknown>;
   if (!res.ok) {
-    throw new Error((json.error as string) || (json.message as string) || "Request failed");
+    const err = new Error((json.error as string) || (json.message as string) || "Request failed") as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return json.data ?? json;
 }
@@ -65,7 +67,6 @@ async function cachedApiFetch(path: string, maxAgeMs: number): Promise<any> {
   writeCache(path, data);
   return data;
 }
-
 interface CreatePredictionBody {
   [key: string]: unknown;
 }

@@ -7,10 +7,6 @@ import { isAuthed } from "./session";
  * unchanged — `withAuth` now just opts the request into sending cookies.
  */
 
-export function getAuthHeaders(): Record<string, string> {
-  return {};
-}
-
 export function hasAuthToken(): boolean {
   return isAuthed();
 }

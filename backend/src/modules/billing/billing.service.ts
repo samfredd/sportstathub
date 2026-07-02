@@ -121,16 +121,31 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       throw Object.assign(new Error('Payment reference is required'), { statusCode: 400 });
     }
 
-    const payment = await repo.findPaymentByReference(reference);
-    if (!payment) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
-    if (Number(payment.user_id) !== Number(user?.id)) {
+    const existing = await repo.findPaymentByReference(reference);
+    if (!existing) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
+    if (Number(existing.user_id) !== Number(user?.id)) {
       throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
     }
-    if (payment.status === 'success' && payment.subscription_id) {
+    if (existing.status === 'success' && existing.subscription_id) {
       return {
-        payment,
-        subscription: await repo.findSubscriptionById(payment.subscription_id),
+        payment: existing,
+        subscription: await repo.findSubscriptionById(existing.subscription_id),
       };
+    }
+
+    // Claim atomically so the webhook and a user-initiated verify can't both
+    // activate the subscription. Exactly one caller proceeds; the other reads
+    // back the final state (or reports "in progress" if the winner is mid-flight).
+    const payment = await repo.claimPaymentForProcessing(reference);
+    if (!payment) {
+      const settled = await repo.findPaymentByReference(reference);
+      if (settled?.status === 'success' && settled.subscription_id) {
+        return {
+          payment: settled,
+          subscription: await repo.findSubscriptionById(settled.subscription_id),
+        };
+      }
+      throw Object.assign(new Error('Payment is being processed — try again shortly'), { statusCode: 409 });
     }
 
     const verification = await paystack.verifyTransaction(reference);
@@ -171,9 +186,18 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
     };
   }
 
+  async function listPayments(user: any, { limit = 20, offset = 0 } = {}) {
+    if (!user?.id) {
+      throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    }
+    const payments = await repo.findPaymentsByUser(user.id, { limit, offset });
+    return payments.map((p: any) => ({ ...p, amount: toNumber(p.amount) }));
+  }
+
   return {
     listPlans,
     initializeCheckout,
     verifyPayment,
+    listPayments,
   };
 }

@@ -99,17 +99,17 @@ export function createCommunityController(service) {
   }
 
   async function likePrediction(request, reply) {
-    const data = await service.likePrediction(request.params.id);
+    const data = await service.likePrediction(request.params.id, request.user.id);
     return ok(reply, data);
   }
 
   async function likeThread(request, reply) {
-    const data = await service.likeThread(request.params.id);
+    const data = await service.likeThread(request.params.id, request.user.id);
     return ok(reply, data);
   }
 
   async function likeComment(request, reply) {
-    const data = await service.likeComment(request.params.id);
+    const data = await service.likeComment(request.params.id, request.user.id);
     return ok(reply, data);
   }
 

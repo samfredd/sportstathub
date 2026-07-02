@@ -232,7 +232,11 @@ export default function CommentSection({ comments = [], predictionId, targetType
     try {
       const saved = await communityApi.likeComment(commentId);
       setLocalComments(prev => replaceComment(prev, String(commentId), saved));
-    } catch {}
+    } catch (err: any) {
+      if (err?.status === 401 && typeof window !== "undefined") {
+        window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      }
+    }
   }
 
   return (

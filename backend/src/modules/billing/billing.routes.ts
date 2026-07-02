@@ -47,6 +47,20 @@ async function billingRoutes(fastify) {
     schema: { body: verifySchema },
   }, ctrl.verifyPaystack);
 
+  fastify.get('/api/billing/history', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit:  { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          offset: { type: 'integer', minimum: 0, default: 0 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, ctrl.listHistory);
+
   // ── Paystack webhook ────────────────────────────────────────────────────────
   // Paystack POSTs signed events here. We acknowledge immediately (Paystack
   // retries for up to 72 h if we return non-2xx) then process asynchronously.
@@ -90,8 +104,13 @@ async function billingRoutes(fastify) {
 
         await service.verifyPayment({ id: payment.user_id }, reference);
         fastify.log.info({ reference }, 'Paystack webhook: subscription activated');
-      } catch (err) {
-        fastify.log.error({ err, reference }, 'Paystack webhook: failed to activate subscription');
+      } catch (err: any) {
+        // 409 = a user-initiated verify holds the processing claim — not a failure
+        if (err?.statusCode === 409) {
+          fastify.log.info({ reference }, 'Paystack webhook: verification already in progress');
+        } else {
+          fastify.log.error({ err, reference }, 'Paystack webhook: failed to activate subscription');
+        }
       }
     });
   });

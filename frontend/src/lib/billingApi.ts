@@ -13,7 +13,9 @@ async function billingFetch(path: string, options: RequestInit = {}): Promise<an
 
   const json = await res.json().catch(() => ({})) as Record<string, unknown>;
   if (!res.ok) {
-    throw new Error((json.error as string) || (json.message as string) || "Request failed");
+    const err = new Error((json.error as string) || (json.message as string) || "Request failed") as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return json.data ?? json;
 }
@@ -30,4 +32,18 @@ export const billingApi = {
       method: "POST",
       body: JSON.stringify({ reference }),
     }),
+  getHistory: (limit = 20, offset = 0) =>
+    billingFetch(`/api/billing/history?limit=${limit}&offset=${offset}`),
 };
+
+export interface PaymentRecord {
+  id: number;
+  reference: string;
+  plan: string;
+  billing_interval: string;
+  amount: number;
+  currency: string;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+}

@@ -36,6 +36,7 @@ export function setSessionUser(user: SessionUser | null | undefined) {
     window.localStorage.setItem(KEY, JSON.stringify(user ?? {}));
     // Clear any legacy JWT left in localStorage from older builds.
     window.localStorage.removeItem("token");
+    clearApiResponseCache();
     window.dispatchEvent(new Event("storage"));
   } catch {
     /* storage unavailable — ignore */
@@ -47,7 +48,25 @@ export function clearSession() {
   try {
     window.localStorage.removeItem(KEY);
     window.localStorage.removeItem("token");
+    clearApiResponseCache();
     window.dispatchEvent(new Event("storage"));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Session-scoped API response cache (see communityApi.ts). Cleared whenever the
+// signed-in identity changes so user A's cached responses can't leak to user B.
+// Inlined (not imported from communityApi) to avoid a circular dependency:
+// communityApi -> session -> communityApi.
+function clearApiResponseCache() {
+  try {
+    const doomed: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i);
+      if (key?.startsWith("sportstathub:api:")) doomed.push(key);
+    }
+    doomed.forEach((key) => window.sessionStorage.removeItem(key));
   } catch {
     /* ignore */
   }

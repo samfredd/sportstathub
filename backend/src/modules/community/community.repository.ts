@@ -452,39 +452,58 @@ export function createCommunityRepository(db) {
     };
   }
 
-  async function incrementPredictionLike(id) {
-    const { rows } = await db.query(
-      `UPDATE predictions
-       SET stats = jsonb_set(stats, '{likes}', to_jsonb(COALESCE((stats->>'likes')::int, 0) + 1))
-       WHERE id = $1
-       RETURNING *`,
-      [Number(id)]
-    );
-    if (!rows[0]) return null;
-    return findPredictionById(rows[0].id);
+  // Toggle a user's like on a piece of content. Inserts the like if absent,
+  // removes it if present, and moves the denormalized counter by ±1 (never
+  // below 0) in the same transaction. Returns { liked } for the caller.
+  async function toggleContentLike(userId: number, contentType: 'prediction' | 'thread' | 'comment', contentId: number) {
+    const TABLES = {
+      prediction: { sql: `UPDATE predictions SET stats = jsonb_set(stats, '{likes}', to_jsonb(GREATEST(COALESCE((stats->>'likes')::int, 0) + $2, 0))) WHERE id = $1` },
+      thread:     { sql: `UPDATE forum_threads SET stats = jsonb_set(stats, '{likes}', to_jsonb(GREATEST(COALESCE((stats->>'likes')::int, 0) + $2, 0))) WHERE id = $1` },
+      comment:    { sql: `UPDATE comments SET likes = GREATEST(likes + $2, 0) WHERE id = $1` },
+    };
+
+    return db.transact(async (client) => {
+      const { rows: inserted } = await client.query(
+        `INSERT INTO content_likes (user_id, content_type, content_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, content_type, content_id) DO NOTHING
+         RETURNING id`,
+        [userId, contentType, Number(contentId)]
+      );
+      const liked = inserted.length > 0;
+      if (!liked) {
+        await client.query(
+          `DELETE FROM content_likes
+           WHERE user_id = $1 AND content_type = $2 AND content_id = $3`,
+          [userId, contentType, Number(contentId)]
+        );
+      }
+
+      const { rowCount } = await client.query(TABLES[contentType].sql, [Number(contentId), liked ? 1 : -1]);
+      if (!rowCount) {
+        // Content row doesn't exist — abort so the like record rolls back too
+        throw Object.assign(new Error('Content not found'), { statusCode: 404 });
+      }
+      return { liked };
+    });
   }
 
-  async function incrementThreadLike(id) {
-    const { rows } = await db.query(
-      `UPDATE forum_threads
-       SET stats = jsonb_set(stats, '{likes}', to_jsonb(COALESCE((stats->>'likes')::int, 0) + 1))
-       WHERE id = $1
-       RETURNING *`,
-      [Number(id)]
-    );
-    if (!rows[0]) return null;
-    return findThreadById(rows[0].id);
+  async function togglePredictionLike(userId: number, id) {
+    const { liked } = await toggleContentLike(userId, 'prediction', id);
+    const row = await findPredictionById(Number(id));
+    return row ? { row, liked } : null;
   }
 
-  async function incrementCommentLike(id) {
-    const { rows } = await db.query(
-      `UPDATE comments
-       SET likes = likes + 1
-       WHERE id = $1
-       RETURNING *`,
-      [Number(id)]
-    );
-    return rows[0] ?? null;
+  async function toggleThreadLike(userId: number, id) {
+    const { liked } = await toggleContentLike(userId, 'thread', id);
+    const row = await findThreadById(Number(id));
+    return row ? { row, liked } : null;
+  }
+
+  async function toggleCommentLike(userId: number, id) {
+    const { liked } = await toggleContentLike(userId, 'comment', id);
+    const { rows } = await db.query(`SELECT * FROM comments WHERE id = $1`, [Number(id)]);
+    return rows[0] ? { row: rows[0], liked } : null;
   }
 
   async function toggleFollow(followerId: number, creatorId: number) {
@@ -595,9 +614,9 @@ export function createCommunityRepository(db) {
     setUserRole,
     getUserPassword,
     updateUserPassword,
-    incrementPredictionLike,
-    incrementThreadLike,
-    incrementCommentLike,
+    togglePredictionLike,
+    toggleThreadLike,
+    toggleCommentLike,
     toggleFollow,
     isFollowing,
   };

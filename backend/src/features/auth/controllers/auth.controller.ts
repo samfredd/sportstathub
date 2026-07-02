@@ -220,20 +220,13 @@ export async function verifyOTP(request, reply) {
       return reply.status(400).send({ error: "Invalid request" });
     }
 
-    // Idempotent behavior:
-    // If already verified → return success instead of error
+    // Already verified → do NOT issue a token here. The OTP has not been
+    // checked at this point, so returning a session would let anyone who
+    // knows a registered email obtain a JWT for that account (auth bypass).
+    // Verified users must sign in through /auth/login with their password.
     if (user.is_verified) {
-      const token = request.server.jwt.sign({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      });
-      setAuthCookie(reply, token);
-
-      return reply.status(200).send({
-        status: "success",
-        message: "User already verified",
-        data: { user, token },
+      return reply.status(409).send({
+        error: "Account is already verified — please sign in",
       });
     }
 

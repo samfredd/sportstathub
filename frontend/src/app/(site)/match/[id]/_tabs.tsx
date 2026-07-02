@@ -5,6 +5,10 @@ import type { MatchShape, ParsedMatchStats, H2HStats } from "@/lib/transforms";
 import { parseMatchStats } from "@/lib/transforms";
 import { withAuth } from "@/lib/authHeaders";
 import PremiumGate, { ProBadge } from "@/components/PremiumGate";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useUpgradeModal } from "@/context/UpgradeModalContext";
+import { CrownIcon } from "@/components/Icons";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -63,19 +67,28 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-const STAT_TYPES = [
+// Stat tiering: goals/corners/shots are table stakes on every free livescore
+// site, so they stay free. The hard-to-source averages (cards, fouls, xG,
+// pass accuracy, …) are what bettors can't get elsewhere — Pro-gated via the
+// advanced_stats feature flag, free pills listed first.
+const STAT_TYPES: { id: string; label: string; pro?: boolean }[] = [
   { id: "goals",      label: "Goals" },
   { id: "corners",    label: "Corners" },
-  { id: "cards",      label: "Cards" },
-  { id: "fouls",      label: "Fouls" },
-  { id: "offsides",   label: "Offsides" },
-  { id: "possession", label: "Possession" },
-  { id: "xg",         label: "xG" },
   { id: "shots",      label: "Shots" },
   { id: "sot",        label: "Shots on Target" },
-  { id: "saves",      label: "Saves" },
-  // "Tackles" intentionally omitted: API-Football's /fixtures/statistics never
-  // returns a tackles field for any league, so the pill could only ever show 0.
+  { id: "cards",      label: "Cards",            pro: true },
+  { id: "redcards",   label: "Red Cards",        pro: true },
+  { id: "fouls",      label: "Fouls",            pro: true },
+  { id: "offsides",   label: "Offsides",         pro: true },
+  { id: "possession", label: "Possession",       pro: true },
+  { id: "xg",         label: "xG",               pro: true },
+  { id: "soff",       label: "Shots off Target", pro: true },
+  { id: "blocked",    label: "Blocked Shots",    pro: true },
+  { id: "passacc",    label: "Pass Accuracy",    pro: true },
+  { id: "saves",      label: "Saves",            pro: true },
+  // "Tackles"/"Throw-ins"/"Interceptions"/"Dribbles"/"Crosses" intentionally
+  // omitted: API-Football's /fixtures/statistics never returns those fields for
+  // any league, so the pills could only ever show 0.
 ];
 
 // Maps our stat type IDs to API-Football statistic type strings.
@@ -91,10 +104,14 @@ const STAT_API_KEY: Partial<Record<StatTypeId, string>> = {
   xg:         "expected_goals",
   shots:      "Total Shots",
   sot:        "Shots on Goal",
+  soff:       "Shots off Goal",
+  blocked:    "Blocked Shots",
+  redcards:   "Red Cards",
+  passacc:    "Passes %",
   saves:      "Goalkeeper Saves",
   // "cards"      → handled specially below (Yellow Cards + Red Cards)
   // "goals"      → from FormMatch.teamGoals / oppGoals (no stats fetch needed)
-  // "possession" → percentage value ("55%"); special-cased in helpers
+  // "possession"/"passacc" → percentage values ("55%"); see PCT_STATS
 };
 
 // Type for the raw stats array returned by /api/matches/:id/stats
@@ -104,6 +121,10 @@ type MatchStatsArr = Array<{ team?: { id?: number }; statistics: Array<{ type: s
 type StatsCache = Record<number, MatchStatsArr | null>;
 
 type StatTypeId = (typeof STAT_TYPES)[number]["id"];
+
+// Percentage-valued stats ("55%"): averaged with a % suffix and no team+opp
+// total row (team% + opp% ≈ 100 is meaningless).
+const PCT_STATS = new Set<StatTypeId>(["possession", "passacc"]);
 
 const LAST_N = [5, 10, 15, 20] as const;
 const FREE_H2H_ROWS = 5;
@@ -264,13 +285,6 @@ function extractStat(
       opp:  rawStatVal(statsArr, oi, "Fouls", "Total Fouls"),
     };
   }
-  if (statType === "possession") {
-    // "Ball Possession" values are percentages like "55%" — strip % in rawStatVal
-    return {
-      team: rawStatVal(statsArr, ti, "Ball Possession"),
-      opp:  rawStatVal(statsArr, oi, "Ball Possession"),
-    };
-  }
   if (statType === "xg") {
     // API key is "expected_goals"; fall back to "Expected Goals" defensively
     return {
@@ -307,8 +321,8 @@ function computeStatAvgs(
   });
   const n = withData.length;
 
-  // Possession is a % — total (team%+opp%) always ≈ 100, which is meaningless
-  if (statType === "possession") {
+  // Percentage stats — total (team%+opp%) is meaningless
+  if (PCT_STATS.has(statType)) {
     return {
       team:  (teamSum / n).toFixed(1) + "%",
       total: "—",
@@ -326,8 +340,8 @@ function computeStatAvgs(
 /** Get per-match stat total (team + opp) for the table row. */
 function getRowStatTotal(f: FormMatch, statType: StatTypeId, cache: StatsCache): string {
   if (statType === "goals") return String(f.teamGoals + f.oppGoals);
-  // Possession total is always ~100% — meaningless to display
-  if (statType === "possession") return "—";
+  // Percentage totals are always ~100% — meaningless to display
+  if (PCT_STATS.has(statType)) return "—";
   const stats = cache[f.fixtureId];
   if (!stats) return "—";
   const { team, opp } = extractStat(stats, f.isHome, statType);
@@ -356,11 +370,6 @@ function getRowStatScore(f: FormMatch, statType: StatTypeId, cache: StatsCache):
     awayVal = rawStatVal(stats, 1, "Fouls", "Total Fouls");
     return `${homeVal}-${awayVal}`;
   }
-  if (statType === "possession") {
-    homeVal = rawStatVal(stats, 0, "Ball Possession");
-    awayVal = rawStatVal(stats, 1, "Ball Possession");
-    return `${homeVal}%-${awayVal}%`;
-  }
   if (statType === "xg") {
     homeVal = rawStatVal(stats, 0, "expected_goals", "Expected Goals");
     awayVal = rawStatVal(stats, 1, "expected_goals", "Expected Goals");
@@ -371,6 +380,7 @@ function getRowStatScore(f: FormMatch, statType: StatTypeId, cache: StatsCache):
   if (!label) return "—";
   homeVal = rawStatVal(stats, 0, label);
   awayVal = rawStatVal(stats, 1, label);
+  if (PCT_STATS.has(statType)) return `${homeVal}%-${awayVal}%`;
   return `${homeVal}-${awayVal}`;
 }
 
@@ -417,6 +427,18 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
   const [homeVenue, setHomeVenue] = useState<VenueFilter>("all");
   const [awayVenue, setAwayVenue] = useState<VenueFilter>("all");
 
+  // Pro-stat gating — same access rules as PremiumGate: admin flag settings
+  // win, a missing flag fails closed to Pro, and we pass through while loading
+  // so free pills never flash locks. Pro stats open the upgrade modal only on
+  // an explicit pill click (never auto-popped).
+  const { isPro, isAdmin, loading: subLoading } = useSubscription();
+  const { flags, loading: flagsLoading } = useFeatureFlags();
+  const { openUpgradeModal } = useUpgradeModal();
+  const statFlag = flags["advanced_stats"];
+  const hasProStats =
+    subLoading || flagsLoading || isAdmin || isPro ||
+    (!!statFlag && (!statFlag.is_enabled || statFlag.required_plan === "free"));
+
   // Fetch match analytics data client-side (routes are public)
   const [clientStatsData,   setClientStatsData]   = useState<any>(null);
   const [clientLineups,     setClientLineups]     = useState<any[]>([]);
@@ -435,7 +457,7 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
       if (preds?.data)            setClientPredictions(preds.data);
       if (injuries?.data?.length) setClientInjuries(injuries.data);
     });
-  }, [props.matchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [props.matchId]);
 
   const matchStats = useMemo(() => parseMatchStats(clientStatsData), [clientStatsData]);
   const homeLineup = clientLineups.find((item: any) => item.team?.id === props.match.homeId) ?? clientLineups[0];
@@ -473,22 +495,34 @@ export function MatchAnalyticsTabs(props: MatchTabsProps) {
 
   return (
     <div>
-      {/* ── Stat filter bar ─────────────────────────────────────── */}
+      {/* ── Stat filter bar — Pro stats show a gold crown for free users ── */}
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-3 pb-0.5">
-        {STAT_TYPES.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setStatType(s.id as StatTypeId)}
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-              statType === s.id
-                ? "bg-accent text-white"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${statType === s.id ? "bg-white" : "bg-muted/60"}`} />
-            {s.label}
-          </button>
-        ))}
+        {STAT_TYPES.map((s) => {
+          const locked = !!s.pro && !hasProStats;
+          return (
+            <button
+              key={s.id}
+              onClick={() =>
+                locked ? openUpgradeModal(`${s.label} analytics`) : setStatType(s.id as StatTypeId)
+              }
+              aria-label={locked ? `${s.label} — Pro feature, upgrade to unlock` : s.label}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                statType === s.id
+                  ? "bg-accent text-white"
+                  : locked
+                    ? "text-muted hover:text-accent-gold"
+                    : "text-muted hover:text-foreground"
+              }`}
+            >
+              {locked ? (
+                <CrownIcon className="w-3 h-3 text-accent-gold" />
+              ) : (
+                <span className={`w-1.5 h-1.5 rounded-full ${statType === s.id ? "bg-white" : "bg-muted/60"}`} />
+              )}
+              {s.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Tab navigation + Last N ─────────────────────────────── */}
