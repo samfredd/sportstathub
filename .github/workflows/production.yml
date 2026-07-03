@@ -425,11 +425,6 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GHCR_USER" --password-stdin
 
-            # TEMP DIAGNOSTIC — GitHub auto-redacts any output matching a registered
-            # secret value, so this is safe even if non-empty. Remove once resolved.
-            echo "DIAG: APP_DB_PASSWORD raw='${APP_DB_PASSWORD:-}' len=${#APP_DB_PASSWORD}"
-            echo "DIAG: APP_DATABASE_URL raw='${APP_DATABASE_URL:-}' len=${#APP_DATABASE_URL}"
-
             # Single source of truth for the DB password. compose interpolates
             # ${DB_PASSWORD} into every Postgres connection string (backend + oddswitch),
             # so it must be non-empty and consistent. If no standalone DB_PASSWORD secret
@@ -438,7 +433,6 @@ jobs:
             if [ -z "$APP_DB_PASSWORD" ] && [ -n "${APP_DATABASE_URL:-}" ]; then
               APP_DB_PASSWORD="$(printf '%s' "$APP_DATABASE_URL" | sed -E 's#^[a-zA-Z+]+://[^:]+:([^@]*)@.*#\1#')"
             fi
-            echo "DIAG: derived APP_DB_PASSWORD len=${#APP_DB_PASSWORD}"
             if [ -z "$APP_DB_PASSWORD" ]; then
               echo "ERROR: DB_PASSWORD is empty — set the DB_PASSWORD secret or include the password in DATABASE_URL." >&2
               exit 1
