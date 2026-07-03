@@ -428,19 +428,6 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login "$IMAGE_REGISTRY" -u "$GHCR_USER" --password-stdin
 
-            # TEMP DIAGNOSTIC — GitHub auto-redacts any output matching a registered
-            # secret value, so printing lengths (and values, which get masked) is safe.
-            # Remove once every secret's real value is confirmed restored.
-            for v in APP_SECRET_KEY APP_DATABASE_URL APP_DB_PASSWORD APP_CORS_ORIGIN \
-                     APP_REDIS_PASSWORD APP_GOOGLE_CLIENT_ID APP_GOOGLE_CLIENT_SECRET \
-                     APP_FOOTBALL_API_KEY APP_ODDS_API_KEY APP_SPORTS_API_KEY \
-                     APP_ADMIN_INVITE_KEY APP_SMTP_HOST APP_SMTP_USER APP_SMTP_PASS \
-                     APP_EMAIL_FROM APP_PAYSTACK_PUBLIC_KEY APP_PAYSTACK_SECRET_KEY \
-                     APP_ODDSWITCH_API_KEY DEPLOY_DOMAIN; do
-              val="${!v:-}"
-              echo "DIAG: $v len=${#val}"
-            done
-
             # Single source of truth for the DB password. compose interpolates
             # ${DB_PASSWORD} into every Postgres connection string (backend + oddswitch),
             # so it must be non-empty and consistent. If no standalone DB_PASSWORD secret
@@ -451,6 +438,19 @@ jobs:
             fi
             if [ -z "$APP_DB_PASSWORD" ]; then
               echo "ERROR: DB_PASSWORD is empty — set the DB_PASSWORD secret or include the password in DATABASE_URL." >&2
+              exit 1
+            fi
+
+            # Fail fast on other secrets that have no safe default: an empty SECRET_KEY
+            # crashes the backend container outright (JWT signing key is required), and
+            # an empty DOMAIN silently breaks CORS/OAuth-callback/email-from URLs since
+            # compose builds those by interpolating ${DOMAIN} directly.
+            if [ -z "${APP_SECRET_KEY:-}" ]; then
+              echo "ERROR: SECRET_KEY is empty — set the SECRET_KEY repository secret." >&2
+              exit 1
+            fi
+            if [ -z "${DEPLOY_DOMAIN:-}" ]; then
+              echo "ERROR: DEPLOY_DOMAIN is empty — set the PRODUCTION_DOMAIN repository secret or variable." >&2
               exit 1
             fi
 
