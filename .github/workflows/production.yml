@@ -400,7 +400,10 @@ jobs:
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          # Password auth only — PRODUCTION_SSH_KEY doesn't parse in any SSH client
+          # tried (native ssh, drone-ssh). Passing an unusable key still triggers a
+          # parse attempt on every connection, which appears to have been
+          # contributing to intermittent connection timeouts. Password-only avoids that.
           password: ${{ secrets.PRODUCTION_PASSWORD }}
           # Single unbroken line — deliberately NOT a YAML folded block (`>-`).
           # Folded scalars join line breaks with a space, so a multi-line list here
