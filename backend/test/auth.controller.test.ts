@@ -47,6 +47,17 @@ test('login rejects suspended accounts even with valid credentials', async () =>
           return 'token';
         },
       },
+      redis: {
+        async get() { return null; },
+        multi() {
+          return {
+            incr() { return this; },
+            expire() { return this; },
+            async exec() { return []; },
+          };
+        },
+        async del() {},
+      },
     },
   };
 

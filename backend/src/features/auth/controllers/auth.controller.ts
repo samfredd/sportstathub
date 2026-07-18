@@ -23,7 +23,27 @@ const RESET_VALIDITY = 900;
 const RESET_RESEND_COOLDOWN = 60;
 const RESET_MAX_ATTEMPTS = 5;
 
+// Per-account login lockout — independent of the route's IP-based rate limit,
+// which an attacker can dilute across many claimed IPs. Keyed by email so a
+// single account can't be brute-forced regardless of how many source IPs (real
+// or spoofed) the attempts are spread across.
+const LOGIN_MAX_ATTEMPTS = 8;
+const LOGIN_LOCKOUT_WINDOW = 900; // 15 minutes
+
 const IS_PROD = process.env.NODE_ENV === "production";
+
+// Precomputed once and reused so a login attempt against a non-existent (or
+// OAuth-only, password-less) account still runs a real bcrypt comparison —
+// otherwise returning immediately for "no such user" is measurably faster
+// than the found-user path, letting response timing reveal which emails have
+// a registered account.
+let dummyHashPromise: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  if (!dummyHashPromise) {
+    dummyHashPromise = hashPassword(crypto.randomBytes(32).toString("hex"));
+  }
+  return dummyHashPromise;
+}
 
 /**
  * Set the JWT as an httpOnly cookie so the browser can't read it from JS
@@ -92,10 +112,16 @@ export async function register(request, reply) {
       user = existing[0];
     }
 
-    // If already verified → stop immediately
-    // Prevents OTP abuse on active accounts
+    // If already verified → stop immediately, but respond exactly like the
+    // generic success path below (not a distinguishable 409). A different
+    // status code here would let an attacker enumerate which emails already
+    // have a verified account — the same leak the generic response two
+    // branches down is specifically designed to avoid.
     if (user.is_verified) {
-      return reply.status(409).send({ error: "User already exists" });
+      return reply.status(200).send({
+        status: "success",
+        message: "If the email exists, a verification code has been sent",
+      });
     }
 
     // OTP disabled: auto-verify and return JWT immediately
@@ -421,6 +447,14 @@ export async function login(request, reply) {
     const { email, password } = request.body;
 
     const formattedEmail = email.trim().toLowerCase();
+    const attemptsKey = `login_attempts:${formattedEmail}`;
+
+    const priorAttempts = Number((await request.server.redis.get(attemptsKey)) ?? 0);
+    if (priorAttempts >= LOGIN_MAX_ATTEMPTS) {
+      return reply.status(429).send({
+        error: "Too many failed login attempts. Please try again later.",
+      });
+    }
 
     // Fetch user
     const { rows } = await request.server.db.query(
@@ -430,23 +464,25 @@ export async function login(request, reply) {
 
     const user = rows[0];
 
+    // Always run a real bcrypt comparison — even when the account doesn't
+    // exist or has no password (OAuth-only) — against a fixed dummy hash, so
+    // this branch takes the same time as a genuine wrong-password check and
+    // can't be used to enumerate which emails are registered.
+    const valid = await comparePasswords(password, user?.password ?? (await getDummyHash()));
+
     // Do not reveal whether email exists
-    if (!user) {
-      return reply.status(401).send({
-        error: "Invalid credentials",
-      });
-    }
+    if (!user || !user.password || !valid) {
+      await request.server.redis
+        .multi()
+        .incr(attemptsKey)
+        .expire(attemptsKey, LOGIN_LOCKOUT_WINDOW)
+        .exec();
 
-    // Verify password
-    if (!user.password) {
-      return reply.status(401).send({
-        error: "Use Google sign-in for this account",
-      });
-    }
-
-    const valid = await comparePasswords(password, user.password);
-
-    if (!valid) {
+      if (user && !user.password) {
+        return reply.status(401).send({
+          error: "Use Google sign-in for this account",
+        });
+      }
       return reply.status(401).send({
         error: "Invalid credentials",
       });
@@ -465,6 +501,9 @@ export async function login(request, reply) {
         error: `Account is ${user.status}`,
       });
     }
+
+    // Successful login — reset the lockout counter
+    await request.server.redis.del(attemptsKey);
 
     // Issue token
     const token = request.server.jwt.sign({

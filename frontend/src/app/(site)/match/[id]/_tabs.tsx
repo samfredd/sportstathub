@@ -1182,7 +1182,7 @@ const ANALYSE_TABS = [
 type AnalyseTabId = (typeof ANALYSE_TABS)[number]["id"];
 
 function SmartAnalyseTab(props: MatchTabsProps) {
-  const [analyseTab, setAnalyseTab] = useState<AnalyseTabId>("stats");
+  const [analyseTab, setAnalyseTab] = useState<AnalyseTabId>("ai");
   const { match, matchStats, statsData, events, momentum, lineups, homeLineup, awayLineup, signals, model, trend, predictions, injuries, hasStarted, isFinished } = props;
 
   return (

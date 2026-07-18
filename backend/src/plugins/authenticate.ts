@@ -90,10 +90,21 @@ async function authenticatePlugin(fastify) {
           [featureKey]
         );
         const flag = rows[0];
-        if (flag && (!flag.is_enabled || flag.required_plan === 'free')) return;
+        // A disabled flag must reject the request, not skip auth entirely —
+        // "disabled" bypassing the gate would make a paused/broken feature
+        // MORE accessible (fully public, unauthenticated) than a working one.
+        if (flag && !flag.is_enabled) {
+          return reply.status(403).send({ status: 'error', error: 'This feature is currently unavailable' });
+        }
         requiredPlan = flag?.required_plan ?? fallbackPlan;
       } catch {
         requiredPlan = fallbackPlan;
+      }
+
+      // A "free" required_plan means no paid plan is needed, not that login
+      // itself is optional — still authenticate, just skip the plan check.
+      if (requiredPlan === 'free') {
+        return verifyAndLoadUser(request, reply);
       }
 
       return fastify.requireProAccess(request, reply, requiredPlan);

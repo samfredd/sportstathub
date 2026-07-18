@@ -40,9 +40,18 @@ export function createOAuthRepository(db) {
    *      → INSERT with is_verified = TRUE (Google already verified the email)
    *
    *   2. Existing password-based user with same email
-   *      → Link their Google account: set google_id + avatar_url, mark verified
+   *      → Link their Google account: set google_id + avatar_url, mark verified.
    *         COALESCE keeps an existing google_id in place to prevent overwriting
    *         if somehow two different Google profiles share the same email.
+   *
+   *         If the existing row was NOT already verified, its password is wiped
+   *         out here. An unverified row can be created by anyone who merely
+   *         typed this email address into /auth/register (they never proved
+   *         inbox ownership via OTP) — without this, that attacker-chosen
+   *         password would survive the Google link and let them log in via
+   *         /auth/login once Google's verified-email flips is_verified to TRUE,
+   *         taking over the account. A password on an already-verified row was
+   *         proven by its real owner, so it's left untouched.
    *
    *   3. Returning OAuth user (google_id already set, same email)
    *      → UPDATE avatar_url in case their profile picture changed
@@ -57,7 +66,8 @@ export function createOAuthRepository(db) {
          google_id      = COALESCE(users.google_id, EXCLUDED.google_id),
          avatar_url     = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
          oauth_provider = COALESCE(users.oauth_provider, EXCLUDED.oauth_provider),
-         is_verified    = TRUE
+         is_verified    = TRUE,
+         password       = CASE WHEN users.is_verified THEN users.password ELSE NULL END
        RETURNING id, username, email, role, status, is_verified, created_at, avatar_url`,
       [googleId, email, username, avatarUrl]
     );
