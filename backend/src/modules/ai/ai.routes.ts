@@ -418,6 +418,17 @@ ${formLine(awayForm, away?.id)}`;
 
 // ─── NVIDIA AI client ─────────────────────────────────────────────────────────
 
+// Nemotron models run in reasoning mode by default and emit a chain-of-thought
+// wall of text before (or instead of) the actual answer. "/no_think" as the
+// first (system) message turns that off so `content` only ever holds the
+// final structured response we ask for.
+function toNvidiaMessages(prompt: string) {
+  return [
+    { role: 'system', content: '/no_think' },
+    { role: 'user', content: prompt },
+  ];
+}
+
 async function callNvidia(body: object, timeoutMs: number): Promise<Response> {
   return fetch(`${config.nvidiaBaseUrl}/chat/completions`, {
     method:  'POST',
@@ -430,12 +441,61 @@ async function callNvidia(body: object, timeoutMs: number): Promise<Response> {
   });
 }
 
+// Defensive net in case a model still wraps reasoning in <think>...</think>
+// inline despite "/no_think" — strips it across chunk boundaries so it never
+// reaches the client, even if reasoning tags split across separate tokens.
+// `flush()` must be called once the stream ends to release the small tail
+// held back for split-tag detection — without it the last few characters of
+// every response would be silently dropped.
+function createThinkTagFilter() {
+  const OPEN  = '<think>';
+  const CLOSE = '</think>';
+  let inThink = false;
+  let carry   = '';
+
+  function process(text: string, isFinal: boolean): string {
+    carry += text;
+    let out = '';
+    for (;;) {
+      if (!inThink) {
+        const idx = carry.indexOf(OPEN);
+        if (idx === -1) {
+          const holdBack = isFinal ? 0 : OPEN.length - 1;
+          const safeLen = Math.max(0, carry.length - holdBack);
+          out += carry.slice(0, safeLen);
+          carry = carry.slice(safeLen);
+          break;
+        }
+        out += carry.slice(0, idx);
+        carry = carry.slice(idx + OPEN.length);
+        inThink = true;
+      } else {
+        const idx = carry.indexOf(CLOSE);
+        if (idx === -1) {
+          const holdBack = isFinal ? 0 : CLOSE.length - 1;
+          carry = carry.slice(Math.max(0, carry.length - holdBack));
+          break;
+        }
+        carry = carry.slice(idx + CLOSE.length);
+        inThink = false;
+      }
+    }
+    return out;
+  }
+
+  return {
+    push:  (text: string) => process(text, false),
+    flush: () => process('', true),
+  };
+}
+
 async function* streamNvidiaTokens(response: Response): AsyncGenerator<string> {
-  const reader  = response.body!.getReader();
-  const decoder = new TextDecoder();
+  const reader      = response.body!.getReader();
+  const decoder     = new TextDecoder();
+  const filterThink = createThinkTagFilter();
   let buf = '';
 
-  while (true) {
+  streamLoop: while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buf += decoder.decode(value, { stream: true });
@@ -445,14 +505,20 @@ async function* streamNvidiaTokens(response: Response): AsyncGenerator<string> {
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
       const payload = trimmed.slice(5).trim();
-      if (payload === '[DONE]') return;
+      if (payload === '[DONE]') break streamLoop;
       try {
         const chunk = JSON.parse(payload);
         const token = chunk.choices?.[0]?.delta?.content;
-        if (token) yield token;
+        if (token) {
+          const visible = filterThink.push(token);
+          if (visible) yield visible;
+        }
       } catch { /* malformed SSE line — skip */ }
     }
   }
+
+  const tail = filterThink.flush();
+  if (tail) yield tail;
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -526,7 +592,7 @@ async function aiRoutes(fastify: any) {
     try {
       const nvidiaRes = await callNvidia({
         model:       config.nvidiaModel,
-        messages:    [{ role: 'user', content: prompt }],
+        messages:    toNvidiaMessages(prompt),
         stream:      true,
         temperature: 0.3,
         max_tokens:  350,
@@ -629,7 +695,7 @@ RULES:
     try {
       const nvidiaRes = await callNvidia({
         model:       config.nvidiaModel,
-        messages:    [{ role: 'user', content: fullPrompt }],
+        messages:    toNvidiaMessages(fullPrompt),
         stream:      true,
         temperature: 0.25,
         max_tokens:  300,
@@ -660,7 +726,7 @@ RULES:
     try {
       const res = await callNvidia({
         model:       config.nvidiaModel,
-        messages:    [{ role: 'user', content: 'Reply with exactly: "NVIDIA AI is working."' }],
+        messages:    toNvidiaMessages('Reply with exactly: "NVIDIA AI is working."'),
         stream:      false,
         temperature: 0.0,
         max_tokens:  20,
@@ -669,7 +735,7 @@ RULES:
         return reply.status(502).send({ status: 'error', error: `NVIDIA AI returned HTTP ${res.status}.`, hint: `Check that NVIDIA_API_KEY is valid and model "${config.nvidiaModel}" is available on build.nvidia.com` });
       }
       const json: any = await res.json();
-      const text = json.choices?.[0]?.message?.content ?? '';
+      const text = (json.choices?.[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, '');
       return reply.send({ status: 'ok', model: config.nvidiaModel, url: config.nvidiaBaseUrl, response: text.trim() });
     } catch (e: any) {
       return reply.status(503).send({ status: 'error', error: `Cannot reach NVIDIA AI: ${e.message}`, hint: 'Verify NVIDIA_API_KEY is set and the network can reach integrate.api.nvidia.com' });
