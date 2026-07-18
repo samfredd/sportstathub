@@ -12,7 +12,6 @@ This deployment is fully Dockerized:
 | OddSwitch Workers | internal | Celery translation and browser workers |
 | PostgreSQL | internal 5432 | Persistent Docker volume |
 | Redis | internal 6379 | Persistent Docker volume |
-| Ollama | localhost 11434 | Optional local AI model runtime |
 
 ## Server Setup
 
@@ -43,7 +42,7 @@ cd /var/www/project
 bash deploy/deploy.sh
 ```
 
-The script pulls the latest code, creates the external Traefik network if missing, builds Docker images, starts the stack, pulls the configured Ollama model, and checks `/health`.
+The script pulls the latest code, creates the external Traefik network if missing, builds Docker images, starts the stack, and checks `/health`.
 
 ## Deploy From Published Images
 

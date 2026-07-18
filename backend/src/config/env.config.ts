@@ -43,10 +43,11 @@ const config = {
   // Set a strong random string; leave unset to disable admin self-registration
   adminInviteKey: process.env.ADMIN_INVITE_KEY || null,
 
-  // Ollama — containerised LLM inference for AI match predictions
-  // Production: docker compose up ollama && docker exec ollama ollama pull qwen2.5:1.5b
-  ollamaUrl:   process.env.OLLAMA_BASE_URL || process.env.OLLAMA_URL || 'http://ollama:11434',
-  ollamaModel: process.env.OLLAMA_MODEL    || 'qwen2.5:0.5b',
+  // NVIDIA AI (build.nvidia.com / NIM) — hosted LLM inference for AI match predictions
+  // Get an API key at https://build.nvidia.com
+  nvidiaApiKey:  process.env.NVIDIA_API_KEY || null,
+  nvidiaBaseUrl: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+  nvidiaModel:   process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-super-120b-a12b',
 
   // OTP verification — set REQUIRE_OTP=false to skip email verification on register
   // and return a JWT directly (useful during development or soft-launch)

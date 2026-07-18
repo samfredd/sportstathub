@@ -1,7 +1,7 @@
 # Deployment Guide
 
 Target: Hostinger VPS — 1 vCPU, 4 GB RAM, Linux.  
-Stack: Traefik (SSL) → Next.js frontend + Fastify backend + PostgreSQL + Redis + **Ollama (CPU)**.
+Stack: Traefik (SSL) → Next.js frontend + Fastify backend + PostgreSQL + Redis. AI match predictions call the hosted **NVIDIA AI** API — no local inference container to manage.
 
 ---
 
@@ -44,9 +44,10 @@ Edit `.env` and fill in every `CHANGE_ME` value:
 | `SECRET_KEY` | JWT signing secret (`openssl rand -hex 32`) |
 | `ADMIN_INVITE_KEY` | Admin registration token |
 | `FOOTBALL_API_KEY` | API-Football key |
-| `OLLAMA_MODEL` | Model to use (default: `qwen2.5:1.5b`) |
+| `NVIDIA_API_KEY` | NVIDIA AI API key (get one at https://build.nvidia.com) |
+| `NVIDIA_MODEL` | Model to use (default: `nvidia/nemotron-3-super-120b-a12b`) |
 
-`OLLAMA_BASE_URL` is hardcoded to `http://ollama:11434` in the compose file — do not change it unless you move Ollama off the internal Docker network.
+`NVIDIA_BASE_URL` defaults to `https://integrate.api.nvidia.com/v1` in the compose file — only override it if you're routing through a proxy or self-hosted NIM instance.
 
 ### 3. Build containers
 
@@ -54,65 +55,34 @@ Edit `.env` and fill in every `CHANGE_ME` value:
 docker compose -f docker-compose.prod.yml build
 ```
 
-### 4. Start infrastructure (Ollama first, so the model can be pulled before backend starts)
+### 4. Start everything
 
 ```bash
-# Start Ollama alone
-docker compose -f docker-compose.prod.yml up -d ollama
-
-# Wait for it to be healthy, then pull the model
-./scripts/pull-ollama-model.sh
-
-# Start everything else
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
 
-## Model management
+## Switching to a different model
 
-### Pull / update the model
-
-```bash
-# Pull into the running container (model is persisted in the ollama_data volume)
-docker exec ollama ollama pull qwen2.5:1.5b
-
-# Or use the helper script
-./scripts/pull-ollama-model.sh
-
-# Confirm the model is loaded
-docker exec ollama ollama list
-```
-
-### Switch to a different model
-
-1. Edit `.env`: `OLLAMA_MODEL=<new-model>`
-2. Pull the new model: `docker exec ollama ollama pull <new-model>`
-3. Restart the backend: `docker compose -f docker-compose.prod.yml restart backend`
+1. Edit `.env`: `NVIDIA_MODEL=<new-model>` (must be a model slug available on https://build.nvidia.com)
+2. Restart the backend: `docker compose -f docker-compose.prod.yml restart backend`
 
 ---
 
-## Verify Ollama is working
-
-### Check container health
-
-```bash
-docker compose -f docker-compose.prod.yml ps ollama
-# STATUS should show "(healthy)"
-```
+## Verify NVIDIA AI is working
 
 ### Quick API test via the backend endpoint
 
 ```bash
 curl -s https://<your-domain>/api/ai/test | python3 -m json.tool
-# Expected: { "status": "ok", "model": "qwen2.5:1.5b", ... }
+# Expected: { "status": "ok", "model": "nvidia/nemotron-3-super-120b-a12b", ... }
 ```
 
-### Direct Ollama call from the VPS (port bound to 127.0.0.1 only)
-
-```bash
-curl -s http://127.0.0.1:11434/api/tags | python3 -m json.tool
-```
+If this returns a 502/503, check:
+- `NVIDIA_API_KEY` is set correctly in `.env`
+- The model slug in `NVIDIA_MODEL` exists and is enabled for your API key
+- The VPS has outbound internet access to `integrate.api.nvidia.com`
 
 ---
 
@@ -121,9 +91,6 @@ curl -s http://127.0.0.1:11434/api/tags | python3 -m json.tool
 ```bash
 # All services
 docker compose -f docker-compose.prod.yml logs -f
-
-# Ollama only
-docker compose -f docker-compose.prod.yml logs -f ollama
 
 # Backend only
 docker compose -f docker-compose.prod.yml logs -f backend --tail 100
@@ -136,7 +103,6 @@ docker compose -f docker-compose.prod.yml logs -f backend --tail 100
 ```bash
 # Restart a single service
 docker compose -f docker-compose.prod.yml restart backend
-docker compose -f docker-compose.prod.yml restart ollama
 
 # Full restart (keeps volumes intact)
 docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml up -d
@@ -152,7 +118,7 @@ git pull
 # Rebuild changed services
 docker compose -f docker-compose.prod.yml build backend frontend
 
-# Rolling restart (keeps Ollama + DB + Redis up)
+# Rolling restart
 docker compose -f docker-compose.prod.yml up -d --no-deps backend frontend
 ```
 
@@ -167,7 +133,7 @@ free -h                         # check available RAM
 docker stats --no-stream        # check per-container usage
 ```
 
-`qwen2.5:1.5b` needs ~1.2 GB RAM. If the system is tight:
+Since AI inference now runs on NVIDIA's hosted infrastructure rather than a local model container, the backend's own memory footprint is small. If the system is still tight:
 
 ```bash
 # Stop non-essential containers temporarily
@@ -181,34 +147,15 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-### Ollama unhealthy / never starts
+### Slow or failing AI responses
+
+Predictions are cached in Redis for 1 hour. If requests are timing out, check NVIDIA's API status and increase the `AbortSignal.timeout` in `ai.routes.ts` (currently 120 s for match predictions, 60 s for free-text predict/test).
+
+### NVIDIA AI returns 401/403
+
+The `NVIDIA_API_KEY` is missing, invalid, or the model in `NVIDIA_MODEL` isn't enabled for that key. Verify both in the `.env` on the server and re-run:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs ollama
-# Common causes:
-#   - Model not pulled yet  → ./scripts/pull-ollama-model.sh
-#   - Port conflict on 11434 → lsof -i :11434
-```
-
-### Backend cannot reach Ollama
-
-```bash
-# Confirm both are on the "internal" network
-docker network inspect <project>_internal | grep -A3 '"Name"'
-
-# Test connectivity from inside the backend container
-docker exec <backend-container> curl -s http://ollama:11434/api/tags
-```
-
-### Slow AI responses
-
-`qwen2.5:1.5b` on 1 vCPU averages 3–8 tokens/second. Predictions are cached in Redis for 1 hour. If the first call times out, increase the `AbortSignal.timeout` in `ai.routes.ts` (currently 120 s).
-
-### Model not found error (HTTP 404 from Ollama)
-
-```bash
-docker exec ollama ollama list          # check what is pulled
-docker exec ollama ollama pull qwen2.5:1.5b
 docker compose -f docker-compose.prod.yml restart backend
 ```
 
@@ -218,7 +165,6 @@ docker compose -f docker-compose.prod.yml restart backend
 
 | Variable | Where set | Default | Description |
 |---|---|---|---|
-| `OLLAMA_BASE_URL` | compose / `.env` | `http://ollama:11434` | Ollama API base URL |
-| `OLLAMA_MODEL` | `.env` | `qwen2.5:1.5b` | Model name |
-| `OLLAMA_NUM_PARALLEL` | compose | `1` | Max concurrent inference requests |
-| `OLLAMA_MAX_LOADED_MODELS` | compose | `1` | Models kept in memory simultaneously |
+| `NVIDIA_API_KEY` | `.env` | — | NVIDIA AI API key from https://build.nvidia.com |
+| `NVIDIA_BASE_URL` | compose / `.env` | `https://integrate.api.nvidia.com/v1` | NVIDIA AI API base URL |
+| `NVIDIA_MODEL` | `.env` | `nvidia/nemotron-3-super-120b-a12b` | Model slug |

@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
-# Start the Ollama AI container and the Fastify backend (via PM2).
+# Start the Fastify backend (via PM2). AI predictions call the hosted
+# NVIDIA AI API directly, so there is no local model container to manage.
 #
 # Usage (from project root):
 #   ./scripts/start-ai-backend.sh
 #
 # What it does:
-#   1. Starts Ollama via docker-compose.ollama.yml (no prod secrets needed)
-#   2. Also ensures db + redis are up (uses backend/docker-compose.yaml for dev,
+#   1. Ensures db + redis are up (uses backend/docker-compose.yaml for dev,
 #      or docker-compose.prod.yml on the VPS when --prod flag is passed)
-#   3. Waits for Ollama to pass its healthcheck
-#   4. Pulls the model if it isn't already in the volume
-#   5. Ensures backend/.env has OLLAMA_BASE_URL=http://localhost:11434
-#      (PM2 runs on the host, not inside Docker, so it resolves via the bound port)
-#   6. Starts or reloads the PM2 "backend" process
-#   7. Verifies the backend health endpoint
+#   2. Checks that backend/.env has NVIDIA_API_KEY set
+#   3. Starts or reloads the PM2 "backend" process
+#   4. Verifies the backend health endpoint
 
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-OLLAMA_COMPOSE="$ROOT_DIR/docker-compose.ollama.yml"
 INFRA_COMPOSE="$ROOT_DIR/backend/docker-compose.yaml"       # dev: db + redis only
 PROD_COMPOSE="$ROOT_DIR/docker-compose.prod.yml"            # VPS: full stack
 BACKEND_ENV="$ROOT_DIR/backend/.env"
@@ -28,15 +24,6 @@ PM2_ECOSYSTEM="$ROOT_DIR/deploy/ecosystem.config.cjs"
 
 PROD_MODE=false
 for arg in "$@"; do [[ "$arg" == "--prod" ]] && PROD_MODE=true; done
-
-# Resolve model: CLI arg → root .env → backend .env → default
-OLLAMA_MODEL="${OLLAMA_MODEL:-}"
-for env_file in "$ROOT_DIR/.env" "$BACKEND_ENV"; do
-  if [[ -z "$OLLAMA_MODEL" && -f "$env_file" ]]; then
-    OLLAMA_MODEL="$(grep -E '^OLLAMA_MODEL=' "$env_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true)"
-  fi
-done
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:1.5b}"
 
 HEALTH_TIMEOUT=120
 BACKEND_PORT=4000
@@ -59,91 +46,21 @@ start_infra() {
   ok "db + redis up"
 }
 
-start_ollama() {
-  if ! docker image inspect ollama/ollama:latest >/dev/null 2>&1; then
-    echo ""
-    echo "  ────────────────────────────────────────────────────"
-    echo "  The Ollama image is not downloaded yet (~2 GB)."
-    echo ""
-    echo "  Pull it first in a separate terminal, then re-run"
-    echo "  this script:"
-    echo ""
-    echo "      docker pull ollama/ollama:latest"
-    echo ""
-    echo "  Tip: if it gets stuck at 0 B, restart Docker Desktop"
-    echo "  and try the pull again."
-    echo "  ────────────────────────────────────────────────────"
-    echo ""
-    exit 1
-  fi
-
-  ok "ollama/ollama:latest already present locally"
-  log "Starting Ollama container..."
-  docker compose -f "$OLLAMA_COMPOSE" up -d
-  ok "Ollama container started"
-}
-
-wait_healthy() {
-  local elapsed=0
-  log "Waiting for Ollama healthcheck (up to ${HEALTH_TIMEOUT}s)..."
-  until docker compose -f "$OLLAMA_COMPOSE" ps ollama 2>/dev/null | grep -q "(healthy)"; do
-    if [[ $elapsed -ge $HEALTH_TIMEOUT ]]; then
-      err "Ollama did not become healthy within ${HEALTH_TIMEOUT}s."
-      err "Check logs: docker compose -f docker-compose.ollama.yml logs ollama"
-      exit 1
-    fi
-    sleep 5
-    elapsed=$((elapsed + 5))
-    printf "    ...%ds\r" "$elapsed"
-  done
-  echo ""
-  ok "Ollama is healthy"
-}
-
-ensure_model_pulled() {
-  log "Checking if model '$OLLAMA_MODEL' is available..."
-  if docker exec ollama ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
-    ok "Model '$OLLAMA_MODEL' already present"
-  else
-    log "Pulling model '$OLLAMA_MODEL' (this may take a few minutes on first run)..."
-    docker exec ollama ollama pull "$OLLAMA_MODEL"
-    ok "Model pulled"
-  fi
-}
-
-patch_backend_env() {
+check_nvidia_api_key() {
   if [[ ! -f "$BACKEND_ENV" ]]; then
     err "backend/.env not found. Copy backend/.env.example first:"
     err "  cp backend/.env.example backend/.env"
     exit 1
   fi
 
-  local target="http://localhost:11434"
-
-  # Update or append OLLAMA_BASE_URL
-  if grep -qE '^OLLAMA_BASE_URL=' "$BACKEND_ENV"; then
-    local current
-    current="$(grep -E '^OLLAMA_BASE_URL=' "$BACKEND_ENV" | head -1 | cut -d= -f2-)"
-    if [[ "$current" != "$target" ]]; then
-      sed -i.bak "s|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=$target|" "$BACKEND_ENV"
-      ok "OLLAMA_BASE_URL updated → $target"
-    else
-      ok "OLLAMA_BASE_URL already correct ($target)"
-    fi
-  else
-    echo "OLLAMA_BASE_URL=$target" >> "$BACKEND_ENV"
-    ok "OLLAMA_BASE_URL added to backend/.env"
+  local key
+  key="$(grep -E '^NVIDIA_API_KEY=' "$BACKEND_ENV" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  if [[ -z "$key" ]]; then
+    err "NVIDIA_API_KEY is not set in backend/.env."
+    err "Get an API key at https://build.nvidia.com and add it to backend/.env."
+    exit 1
   fi
-
-  # Update or append OLLAMA_MODEL
-  if grep -qE '^OLLAMA_MODEL=' "$BACKEND_ENV"; then
-    sed -i.bak "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$BACKEND_ENV"
-  else
-    echo "OLLAMA_MODEL=$OLLAMA_MODEL" >> "$BACKEND_ENV"
-  fi
-  ok "OLLAMA_MODEL set to $OLLAMA_MODEL"
-
-  rm -f "${BACKEND_ENV}.bak"
+  ok "NVIDIA_API_KEY is set"
 }
 
 start_backend_pm2() {
@@ -185,23 +102,18 @@ check_backend_health() {
 cd "$ROOT_DIR"
 
 echo "════════════════════════════════════════"
-echo "  Starting Ollama + Backend"
-echo "  Model : $OLLAMA_MODEL"
+echo "  Starting Backend (NVIDIA AI)"
 echo "  Mode  : $( [[ "$PROD_MODE" == true ]] && echo production || echo dev )"
 echo "════════════════════════════════════════"
 
-start_infra          # 1. db + redis
-start_ollama         # 2. ollama (no prod secrets needed)
-wait_healthy         # 3. healthcheck
-ensure_model_pulled  # 4. pull model if missing
-patch_backend_env    # 5. write correct URL into backend/.env
-start_backend_pm2    # 6. start / reload PM2 process
-check_backend_health # 7. verify
+start_infra            # 1. db + redis
+check_nvidia_api_key   # 2. verify NVIDIA_API_KEY is configured
+start_backend_pm2      # 3. start / reload PM2 process
+check_backend_health   # 4. verify
 
 echo ""
 echo "  ✓ All services running"
 echo ""
 echo "  Test AI   : curl http://localhost:${BACKEND_PORT}/api/ai/test"
 echo "  API logs  : pm2 logs backend"
-echo "  AI logs   : docker compose -f docker-compose.ollama.yml logs -f ollama"
-echo "  Stop all  : pm2 stop backend && docker compose -f docker-compose.ollama.yml stop"
+echo "  Stop all  : pm2 stop backend"

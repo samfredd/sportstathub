@@ -416,6 +416,45 @@ Avg scored: ${ptsAvg(awayForm, away?.id, false)} pts/game | Avg conceded: ${ptsA
 ${formLine(awayForm, away?.id)}`;
 }
 
+// ─── NVIDIA AI client ─────────────────────────────────────────────────────────
+
+async function callNvidia(body: object, timeoutMs: number): Promise<Response> {
+  return fetch(`${config.nvidiaBaseUrl}/chat/completions`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${config.nvidiaApiKey}`,
+    },
+    body:   JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
+async function* streamNvidiaTokens(response: Response): AsyncGenerator<string> {
+  const reader  = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const chunk = JSON.parse(payload);
+        const token = chunk.choices?.[0]?.delta?.content;
+        if (token) yield token;
+      } catch { /* malformed SSE line — skip */ }
+    }
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 async function aiRoutes(fastify: any) {
@@ -485,57 +524,36 @@ async function aiRoutes(fastify: any) {
 
     let analysis = '';
     try {
-      const ollamaRes = await fetch(`${config.ollamaUrl}/api/generate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model:  config.ollamaModel,
-          prompt,
-          stream: true,
-          options: { num_ctx: 1536, temperature: 0.3, num_predict: 350, num_thread: 1 },
-        }),
-        signal: AbortSignal.timeout(120_000),
-      });
+      const nvidiaRes = await callNvidia({
+        model:       config.nvidiaModel,
+        messages:    [{ role: 'user', content: prompt }],
+        stream:      true,
+        temperature: 0.3,
+        max_tokens:  350,
+      }, 120_000);
 
-      if (!ollamaRes.ok) {
-        send({ error: `Ollama returned ${ollamaRes.status}. Ensure model "${config.ollamaModel}" is installed.` });
+      if (!nvidiaRes.ok) {
+        send({ error: `NVIDIA AI returned ${nvidiaRes.status}. Check NVIDIA_API_KEY and model "${config.nvidiaModel}".` });
         raw.end();
         return;
       }
 
-      const reader  = ollamaRes.body!.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const chunk = JSON.parse(line);
-            if (chunk.response) {
-              analysis += chunk.response;
-              send({ token: chunk.response });
-            }
-          } catch { /* malformed JSON line — skip */ }
-        }
+      for await (const token of streamNvidiaTokens(nvidiaRes)) {
+        analysis += token;
+        send({ token });
       }
 
-      send({ done: true, mode, analysis, model: config.ollamaModel });
+      send({ done: true, mode, analysis, model: config.nvidiaModel });
 
       try {
         await fastify.redis.setex(cacheKey, 3600, JSON.stringify({
-          analysis, mode, model: config.ollamaModel,
+          analysis, mode, model: config.nvidiaModel,
           generated_at: new Date().toISOString(),
         }));
       } catch { /* non-fatal */ }
 
     } catch (e: any) {
-      send({ error: e.message ?? 'Could not reach Ollama.' });
+      send({ error: e.message ?? 'Could not reach NVIDIA AI.' });
     }
 
     raw.end();
@@ -609,45 +627,24 @@ RULES:
     const send = (data: object) => raw.write(`data: ${JSON.stringify(data)}\n\n`);
 
     try {
-      const ollamaRes = await fetch(`${config.ollamaUrl}/api/generate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model:  config.ollamaModel,
-          prompt: fullPrompt,
-          stream: true,
-          options: { num_ctx: 1024, temperature: 0.25, num_predict: 300, num_thread: 1 },
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
+      const nvidiaRes = await callNvidia({
+        model:       config.nvidiaModel,
+        messages:    [{ role: 'user', content: fullPrompt }],
+        stream:      true,
+        temperature: 0.25,
+        max_tokens:  300,
+      }, 60_000);
 
-      if (!ollamaRes.ok) {
-        send({ error: `AI service unavailable (HTTP ${ollamaRes.status}). Please try again later.` });
+      if (!nvidiaRes.ok) {
+        send({ error: `AI service unavailable (HTTP ${nvidiaRes.status}). Please try again later.` });
         raw.end();
         return;
       }
 
-      const reader  = ollamaRes.body!.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
       let analysis = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const chunk = JSON.parse(line);
-            if (chunk.response) {
-              analysis += chunk.response;
-              send({ token: chunk.response });
-            }
-          } catch { /* skip */ }
-        }
+      for await (const token of streamNvidiaTokens(nvidiaRes)) {
+        analysis += token;
+        send({ token });
       }
 
       send({ done: true, analysis, sources: dataContext.sources, generatedAt: dataContext.generatedAt });
@@ -661,24 +658,21 @@ RULES:
   // ── Connectivity test ──────────────────────────────────────────────────────
   fastify.get('/api/ai/test', async (_request: any, reply: any) => {
     try {
-      const res = await fetch(`${config.ollamaUrl}/api/generate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model:  config.ollamaModel,
-          prompt: 'Reply with exactly: "Ollama is working."',
-          stream: false,
-          options: { num_ctx: 512, num_predict: 20, temperature: 0.0, num_thread: 1 },
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
+      const res = await callNvidia({
+        model:       config.nvidiaModel,
+        messages:    [{ role: 'user', content: 'Reply with exactly: "NVIDIA AI is working."' }],
+        stream:      false,
+        temperature: 0.0,
+        max_tokens:  20,
+      }, 60_000);
       if (!res.ok) {
-        return reply.status(502).send({ status: 'error', error: `Ollama returned HTTP ${res.status}.`, hint: `docker exec ollama ollama pull ${config.ollamaModel}` });
+        return reply.status(502).send({ status: 'error', error: `NVIDIA AI returned HTTP ${res.status}.`, hint: `Check that NVIDIA_API_KEY is valid and model "${config.nvidiaModel}" is available on build.nvidia.com` });
       }
       const json: any = await res.json();
-      return reply.send({ status: 'ok', model: config.ollamaModel, url: config.ollamaUrl, response: (json.response ?? '').trim() });
+      const text = json.choices?.[0]?.message?.content ?? '';
+      return reply.send({ status: 'ok', model: config.nvidiaModel, url: config.nvidiaBaseUrl, response: text.trim() });
     } catch (e: any) {
-      return reply.status(503).send({ status: 'error', error: `Cannot reach Ollama: ${e.message}`, hint: 'docker compose up -d ollama' });
+      return reply.status(503).send({ status: 'error', error: `Cannot reach NVIDIA AI: ${e.message}`, hint: 'Verify NVIDIA_API_KEY is set and the network can reach integrate.api.nvidia.com' });
     }
   });
 }
