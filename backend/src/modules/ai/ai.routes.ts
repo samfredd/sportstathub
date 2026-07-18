@@ -418,16 +418,16 @@ ${formLine(awayForm, away?.id)}`;
 
 // ─── NVIDIA AI client ─────────────────────────────────────────────────────────
 
-// Nemotron models run in reasoning mode by default and emit a chain-of-thought
-// wall of text before (or instead of) the actual answer. "/no_think" as the
-// first (system) message turns that off so `content` only ever holds the
-// final structured response we ask for.
 function toNvidiaMessages(prompt: string) {
-  return [
-    { role: 'system', content: '/no_think' },
-    { role: 'user', content: prompt },
-  ];
+  return [{ role: 'user', content: prompt }];
 }
+
+// nemotron-3-super-120b-a12b runs chain-of-thought reasoning by default and
+// writes it straight into `content` (no <think> wrapper, no separate
+// reasoning_content field to filter out) — a "/no_think" system message does
+// NOT disable this for this model family; per NVIDIA's docs the only way to
+// turn it off is this request-level chat template flag.
+const NVIDIA_NO_THINKING = { chat_template_kwargs: { enable_thinking: false } };
 
 async function callNvidia(body: object, timeoutMs: number): Promise<Response> {
   return fetch(`${config.nvidiaBaseUrl}/chat/completions`, {
@@ -596,6 +596,7 @@ async function aiRoutes(fastify: any) {
         stream:      true,
         temperature: 0.3,
         max_tokens:  350,
+        ...NVIDIA_NO_THINKING,
       }, 120_000);
 
       if (!nvidiaRes.ok) {
@@ -699,6 +700,7 @@ RULES:
         stream:      true,
         temperature: 0.25,
         max_tokens:  300,
+        ...NVIDIA_NO_THINKING,
       }, 60_000);
 
       if (!nvidiaRes.ok) {
@@ -730,6 +732,7 @@ RULES:
         stream:      false,
         temperature: 0.0,
         max_tokens:  20,
+        ...NVIDIA_NO_THINKING,
       }, 60_000);
       if (!res.ok) {
         return reply.status(502).send({ status: 'error', error: `NVIDIA AI returned HTTP ${res.status}.`, hint: `Check that NVIDIA_API_KEY is valid and model "${config.nvidiaModel}" is available on build.nvidia.com` });
