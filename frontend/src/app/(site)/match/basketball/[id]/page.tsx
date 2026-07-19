@@ -1433,7 +1433,7 @@ function BbAiPredictionCard({ matchId, homeName, awayName, isUpcoming }: {
           <div className="rounded-xl bg-background/70 border border-border/50 p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
-              <span className="text-[10px] text-muted font-black uppercase tracking-widest">Generating</span>
+              <span className="text-[10px] text-muted font-black uppercase tracking-widest">Analysing</span>
             </div>
             <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
               {streamText}

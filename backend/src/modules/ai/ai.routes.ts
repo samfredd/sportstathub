@@ -429,6 +429,12 @@ function toNvidiaMessages(prompt: string) {
 // turn it off is this request-level chat template flag.
 const NVIDIA_NO_THINKING = { chat_template_kwargs: { enable_thinking: false } };
 
+// NVIDIA's own docs specify temperature 1.0 / top_p 0.95 "across all tasks"
+// for this model. Lower temperatures (we previously used 0.0–0.3 for more
+// deterministic, hedged output) caused this model to collapse into repeating
+// degenerate <unk> tokens instead of the requested analysis — don't lower
+// these again without confirming the model no longer degenerates.
+
 async function callNvidia(body: object, timeoutMs: number): Promise<Response> {
   return fetch(`${config.nvidiaBaseUrl}/chat/completions`, {
     method:  'POST',
@@ -594,7 +600,8 @@ async function aiRoutes(fastify: any) {
         model:       config.nvidiaModel,
         messages:    toNvidiaMessages(prompt),
         stream:      true,
-        temperature: 0.3,
+        temperature: 1.0,
+        top_p:       0.95,
         max_tokens:  350,
         ...NVIDIA_NO_THINKING,
       }, 120_000);
@@ -698,7 +705,8 @@ RULES:
         model:       config.nvidiaModel,
         messages:    toNvidiaMessages(fullPrompt),
         stream:      true,
-        temperature: 0.25,
+        temperature: 1.0,
+        top_p:       0.95,
         max_tokens:  300,
         ...NVIDIA_NO_THINKING,
       }, 60_000);
@@ -730,7 +738,8 @@ RULES:
         model:       config.nvidiaModel,
         messages:    toNvidiaMessages('Reply with exactly: "NVIDIA AI is working."'),
         stream:      false,
-        temperature: 0.0,
+        temperature: 1.0,
+        top_p:       0.95,
         max_tokens:  20,
         ...NVIDIA_NO_THINKING,
       }, 60_000);
