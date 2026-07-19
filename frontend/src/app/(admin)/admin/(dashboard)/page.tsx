@@ -138,7 +138,9 @@ export default function AdminDashboard() {
   if (loading) return <LoadingSpinner />;
   if (error)   return <ErrorBanner message={error} />;
 
-  const { users, subscriptions, recentUsers = [] } = stats;
+  const users = stats?.users ?? { total: 0, verified: 0, new_this_week: 0 };
+  const subscriptions = stats?.subscriptions ?? { total: 0, active: 0, pro: 0, enterprise: 0 };
+  const recentUsers = Array.isArray(stats?.recentUsers) ? stats.recentUsers : [];
   const proUsers      = funnel?.pro     ?? subscriptions?.pro      ?? 0;
   const totalCreators = stats.creators?.total ?? "—";
 
@@ -271,8 +273,11 @@ export default function AdminDashboard() {
             ) : (stats.recentPredictions ?? []).map((p: any) => {
               const match = p.match_data ?? {};
               const pred  = p.prediction ?? {};
-              const home  = match.home_team ?? match.homeTeam ?? "—";
-              const away  = match.away_team ?? match.awayTeam ?? "—";
+              // homeTeam/awayTeam are stored as { name, shortName, form } objects
+              // (see community.schemas.ts), not plain strings — render the name.
+              const teamName = (t: any) => (typeof t === "string" ? t : (t?.name ?? "—"));
+              const home  = teamName(match.home_team ?? match.homeTeam);
+              const away  = teamName(match.away_team ?? match.awayTeam);
               const statusColors: Record<string, string> = {
                 open: "bg-accent/10 text-accent",
                 won:  "bg-success/10 text-success",

@@ -155,9 +155,12 @@ export default function AdminPredictionsPage() {
       key: "match_data", label: "Match",
       render: (row: any) => {
         const m = row.match_data ?? {};
+        // homeTeam/awayTeam are stored as { name, shortName, form } objects
+        // (see community.schemas.ts), not plain strings — render the name.
+        const teamName = (t: any) => (typeof t === "string" ? t : (t?.name ?? "—"));
         return (
           <div>
-            <div className="text-sm font-bold text-foreground">{m.home_team ?? m.homeTeam ?? "—"} vs {m.away_team ?? m.awayTeam ?? "—"}</div>
+            <div className="text-sm font-bold text-foreground">{teamName(m.home_team ?? m.homeTeam)} vs {teamName(m.away_team ?? m.awayTeam)}</div>
             <div className="text-xs text-muted">{row.sport}{row.league?.name ? ` · ${row.league.name}` : ""}</div>
           </div>
         );

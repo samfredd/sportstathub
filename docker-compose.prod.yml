@@ -105,6 +105,11 @@ services:
       args:
         NEXT_PUBLIC_API_URL: "https://${DOMAIN}"
     restart: always
+    environment:
+      # Server-side-only: lets proxy.ts reach the backend over the internal
+      # Docker network instead of hairpinning out through the public domain
+      # and back in via Traefik just to reach a sibling container.
+      INTERNAL_API_URL: "http://backend:4000"
     depends_on:
       backend:
         condition: service_healthy
