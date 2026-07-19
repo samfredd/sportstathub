@@ -89,46 +89,67 @@ const MAX_PER_RUN = 25; // cap external API calls per sweep (football free tier)
 
 export function createSettlementService({ db, footballService, log }: any) {
   async function settleOpenPredictions() {
-    const { rows } = await db.query(
-      `SELECT id, sport, prediction, fixture_id
-       FROM predictions
-       WHERE status = 'open' AND fixture_id IS NOT NULL
-       ORDER BY created_at ASC
-       LIMIT $1`,
-      [MAX_PER_RUN]
-    );
+    // A session-scoped advisory lock prevents two scheduler instances (or an
+    // admin-triggered sweep) from duplicating upstream fixture requests. Keep
+    // the same client for the lifetime of the lock.
+    const client = await db.connect();
+    const lockId = 1_984_203_731;
+    let locked = false;
+    try {
+      const lockResult = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [lockId]);
+      locked = Boolean(lockResult.rows[0]?.locked);
+      if (!locked) return { scanned: 0, settled: 0, skipped: 'already_running' };
 
-    let settled = 0;
-    for (const row of rows) {
-      try {
-        const sport = String(row.sport ?? 'football').toLowerCase();
-        const fixture = await footballService.getMatchById(row.fixture_id, sport);
-        if (!fixture) continue;
+      const { rows } = await client.query(
+        `SELECT id, user_id, sport, prediction, fixture_id
+         FROM predictions
+         WHERE status = 'open' AND fixture_id IS NOT NULL
+         ORDER BY created_at ASC
+         LIMIT $1`,
+        [MAX_PER_RUN]
+      );
 
-        const grade = gradePrediction(row.prediction, fixture);
-        if (!grade) continue;
+      let settled = 0;
+      for (const row of rows) {
+        try {
+          const sport = String(row.sport ?? 'football').toLowerCase();
+          const fixture = await footballService.getMatchById(row.fixture_id, sport);
+          if (!fixture) continue;
 
-        const result = {
-          gradedAt: new Date().toISOString(),
-          fixtureId: row.fixture_id,
-          score: { home: fixture?.goals?.home ?? null, away: fixture?.goals?.away ?? null },
-          statusShort: fixture?.fixture?.status?.short ?? null,
-        };
+          const grade = gradePrediction(row.prediction, fixture);
+          if (!grade) continue;
 
-        const upd = await db.query(
-          `UPDATE predictions
-           SET status = $2, settled_at = NOW(), result = $3::jsonb
-           WHERE id = $1 AND status = 'open'`,
-          [row.id, grade, JSON.stringify(result)]
-        );
-        if (upd.rowCount > 0) settled++;
-      } catch (err: any) {
-        log?.warn?.({ err: err?.message, predictionId: row.id }, 'settlement: failed to grade prediction');
+          const result = {
+            gradedAt: new Date().toISOString(),
+            fixtureId: row.fixture_id,
+            score: { home: fixture?.goals?.home ?? null, away: fixture?.goals?.away ?? null },
+            statusShort: fixture?.fixture?.status?.short ?? null,
+          };
+
+          const upd = await client.query(
+            `UPDATE predictions
+             SET status = $2, settled_at = NOW(), result = $3::jsonb
+             WHERE id = $1 AND status = 'open'`,
+            [row.id, grade, JSON.stringify(result)]
+          );
+          if (upd.rowCount > 0) {
+            settled++;
+            if(row.user_id) await client.query(`INSERT INTO notifications(user_id,category,title,body,link,dedupe_key,metadata)
+              SELECT $1,'prediction_results','Prediction settled',$2,$3,$4,$5::jsonb
+              WHERE COALESCE((SELECT prediction_results FROM notification_preferences WHERE user_id=$1),TRUE)
+              ON CONFLICT(user_id,dedupe_key) DO NOTHING`,[row.user_id,`Your prediction was settled as ${grade}.`,`/predictions/${row.id}`,`prediction:settled:${row.id}`,JSON.stringify({predictionId:row.id,status:grade})]);
+          }
+        } catch (err: any) {
+          log?.warn?.({ err: err?.message, predictionId: row.id }, 'settlement: failed to grade prediction');
+        }
       }
-    }
 
-    if (settled > 0) log?.info?.({ settled, scanned: rows.length }, 'settlement: predictions settled');
-    return { scanned: rows.length, settled };
+      if (settled > 0) log?.info?.({ settled, scanned: rows.length }, 'settlement: predictions settled');
+      return { scanned: rows.length, settled };
+    } finally {
+      if (locked) await client.query('SELECT pg_advisory_unlock($1)', [lockId]);
+      client.release();
+    }
   }
 
   return { settleOpenPredictions };

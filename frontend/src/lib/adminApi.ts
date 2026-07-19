@@ -1,19 +1,14 @@
 import {
   clearAdminSession,
-  decodeJwt,
-  getStoredToken,
   getStoredUser,
-  type JwtPayload,
+  storeAdminUser,
+  type AdminUser,
 } from './adminSession';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface ApiError extends Error {
   status?: number;
-}
-
-function getToken(): string | null {
-  return getStoredToken();
 }
 
 function handleSessionExpired() {
@@ -23,13 +18,12 @@ function handleSessionExpired() {
 }
 
 async function adminFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const token = getToken();
   const hasBody = options.body !== undefined && options.body !== null;
   const res = await fetch(`${BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string> || {}),
     },
   });
@@ -70,10 +64,21 @@ export const adminApi = {
   }),
 
   register: (username: string, email: string, password: string, inviteKey: string) =>
-    adminFetch('/auth/admin/register', {
+    adminFetch('/auth/admin/invitations/accept', {
       method: 'POST',
-      body: JSON.stringify({ username, email, password, inviteKey }),
+      body: JSON.stringify({ username, email, password, token: inviteKey }),
     }),
+
+  beginMfaEnrollment: (mfaToken: string) => adminFetch('/auth/admin/mfa/enroll', {
+    method: 'POST', body: JSON.stringify({ mfaToken }),
+  }),
+  verifyMfa: (mfaToken: string, code: string) => adminFetch('/auth/admin/mfa/verify', {
+    method: 'POST', body: JSON.stringify({ mfaToken, code }),
+  }),
+  recoverMfa: (mfaToken: string, recoveryCode: string) => adminFetch('/auth/admin/mfa/recover', {
+    method: 'POST', body: JSON.stringify({ mfaToken, recoveryCode }),
+  }),
+  logout: () => adminFetch('/auth/logout', { method: 'POST' }),
 
   getStats: () => adminFetch('/api/admin/stats'),
 
@@ -139,11 +144,16 @@ export const adminApi = {
   deleteThread: (id: string | number) => adminFetch(`/api/admin/forum/threads/${id}`, { method: 'DELETE' }),
   togglePinThread: (id: string | number) => adminFetch(`/api/admin/forum/threads/${id}/pin`, { method: 'PUT' }),
   deleteComment: (id: string | number) => adminFetch(`/api/admin/forum/comments/${id}`, { method: 'DELETE' }),
+  getModerationReports: (status='open') => adminFetch(`/api/admin/moderation/reports?status=${encodeURIComponent(status)}`),
+  moderateReport: (body: {reportId:number;action:string;reason:string}) => adminFetch('/api/admin/moderation/actions',{method:'POST',body:JSON.stringify(body)}),
+  resolveModerationAppeal: (body:{appealId:number;decision:string;reason:string}) => adminFetch('/api/admin/moderation/appeals/resolve',{method:'POST',body:JSON.stringify(body)}),
 
   // Feature Flags
   getFeatureFlags: () => adminFetch('/api/admin/feature-flags'),
   updateFeatureFlag: (key: string, body: { required_plan?: string; is_enabled?: boolean }) =>
     adminFetch(`/api/admin/feature-flags/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getAiSettings: () => adminFetch('/api/admin/ai/settings'),
+  updateAiSettings: (settings: Record<string,number>) => adminFetch('/api/admin/ai/settings',{method:'PUT',body:JSON.stringify({settings})}),
 
   // Daily stats chart
   getDailyStats: () => adminFetch('/api/admin/stats/daily'),
@@ -168,4 +178,4 @@ export const adminApi = {
 };
 
 // ─── JWT helpers ───────────────────────────────────────────
-export { clearAdminSession, decodeJwt, getStoredUser, type JwtPayload };
+export { clearAdminSession, getStoredUser, storeAdminUser, type AdminUser };

@@ -18,14 +18,14 @@ async def test_dedup_set_and_check():
     cache = MockRedisCache()
 
     # Initially no dedup
-    result = await cache.check_dedup("sportybet", "ABC", "bet9ja")
+    result = await cache.check_dedup("tenant-a", "sportybet", "ABC", "bet9ja")
     assert result is None
 
     # Set dedup
-    await cache.set_dedup("sportybet", "ABC", "bet9ja", "job-123")
+    await cache.set_dedup("tenant-a", "sportybet", "ABC", "bet9ja", "job-123")
 
     # Now should return job_id
-    result = await cache.check_dedup("sportybet", "ABC", "bet9ja")
+    result = await cache.check_dedup("tenant-a", "sportybet", "ABC", "bet9ja")
     assert result == "job-123"
 
 
@@ -34,11 +34,19 @@ async def test_dedup_clear():
     """Dedup key is cleared after job completes."""
     cache = MockRedisCache()
 
-    await cache.set_dedup("sportybet", "ABC", "bet9ja", "job-123")
-    await cache.clear_dedup("sportybet", "ABC", "bet9ja")
+    await cache.set_dedup("tenant-a", "sportybet", "ABC", "bet9ja", "job-123")
+    await cache.clear_dedup("tenant-a", "sportybet", "ABC", "bet9ja")
 
-    result = await cache.check_dedup("sportybet", "ABC", "bet9ja")
+    result = await cache.check_dedup("tenant-a", "sportybet", "ABC", "bet9ja")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_dedup_is_isolated_between_api_key_tenants():
+    cache = MockRedisCache()
+    await cache.set_dedup("tenant-a", "sportybet", "ABC", "bet9ja", "job-a")
+    assert await cache.check_dedup("tenant-a", "sportybet", "ABC", "bet9ja") == "job-a"
+    assert await cache.check_dedup("tenant-b", "sportybet", "ABC", "bet9ja") is None
 
 
 @pytest.mark.asyncio

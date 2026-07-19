@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { adminApi, getStoredUser } from "@/lib/adminApi";
+import { adminApi, clearAdminSession, getStoredUser } from "@/lib/adminApi";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -187,8 +187,9 @@ export default function AdminSettingsPage() {
     setTimeout(() => setNotifSaved(false), 1800);
   }
 
-  function handleSignOut() {
-    try { localStorage.removeItem("token"); } catch {}
+  async function handleSignOut() {
+    await adminApi.logout().catch(() => {});
+    clearAdminSession();
     router.replace("/admin/login");
   }
 

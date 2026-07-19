@@ -31,6 +31,8 @@ export default function SubscriptionPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [history, setHistory] = useState<PaymentRecord[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [lifecycle, setLifecycle] = useState<any>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const { currency: displayCurrency, setCurrency: setDisplayCurrency, formatUsd, liveRates } = useDisplayCurrency();
   const [message, setMessage] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -43,11 +45,13 @@ export default function SubscriptionPage() {
     Promise.all([
       communityApi.getMe().catch(() => null),
       billingApi.getPlans().catch(() => [] as Plan[]),
-    ]).then(([p, pl]) => {
+      billingApi.getSubscription().catch(() => null),
+    ]).then(([p, pl, lc]) => {
       if (!mounted) return;
       setProfile(p);
       if (!p) setMessage("Could not load your profile. Please refresh.");
       setPlans(Array.isArray(pl) ? pl : []);
+      setLifecycle(lc);
       setLoading(false);
     });
     return () => { mounted = false; };
@@ -145,6 +149,31 @@ export default function SubscriptionPage() {
     }
   }
 
+  async function toggleCancellation(restore = false) {
+    setLifecycleBusy(true);
+    setMessage(null);
+    try {
+      await (restore ? billingApi.restoreSubscription() : billingApi.cancelSubscription('Cancelled by account owner'));
+      setLifecycle(await billingApi.getSubscription());
+      setMessage(restore ? 'Your cancellation has been reversed.' : 'Cancellation scheduled. Access remains available through the paid period.');
+    } catch (error: any) {
+      setMessage(error.message || 'Unable to update the subscription.');
+    } finally { setLifecycleBusy(false); }
+  }
+
+  async function downloadReceipt(receiptNumber: string) {
+    try {
+      const receipt = await billingApi.getReceipt(receiptNumber);
+      const safe = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!));
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${safe(receiptNumber)}</title><style>body{font-family:system-ui;max-width:720px;margin:48px auto;color:#172033}h1{margin-bottom:4px}.row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:12px 0}.total{font-size:20px;font-weight:800}small{color:#64748b}</style></head><body><h1>SportStatHub receipt</h1><small>${safe(receipt.receipt_number)} · Issued ${safe(new Date(receipt.issued_at).toLocaleString())}</small><div class="row"><span>Account</span><strong>${safe(receipt.email)}</strong></div><div class="row"><span>Plan</span><strong>${safe(receipt.plan)} · ${safe(receipt.billing_interval)}</strong></div><div class="row total"><span>Total paid</span><span>${safe(new Intl.NumberFormat('en-US',{style:'currency',currency:receipt.currency}).format(Number(receipt.amount)))}</span></div><div class="row"><span>Payment reference</span><code>${safe(receipt.reference)}</code></div><p><small>Payment status: ${safe(receipt.status)}. Keep this receipt for your records.</small></p></body></html>`;
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = `${receiptNumber}.html`; anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) { setMessage(error.message || 'Unable to download receipt.'); }
+  }
+
   return (
     <div className="space-y-6 h-full">
       <div>
@@ -176,7 +205,7 @@ export default function SubscriptionPage() {
                   <p className="text-3xl font-black text-foreground">
                     {currentPlanData?.display_name ?? currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
                   </p>
-                  {expires && <p className="text-sm text-muted mt-1">Renews {expires}</p>}
+                  {expires && <p className="text-sm text-muted mt-1">Access through {expires}</p>}
                   {!expires && currentPlan === "free" && <p className="text-sm text-muted mt-1">Free forever</p>}
                   {currentPlanData && currentPlan !== "free" && (
                     <p className="text-sm text-muted mt-1">
@@ -195,6 +224,19 @@ export default function SubscriptionPage() {
                   </div>
                 ))}
               </div>
+
+              {currentPlan !== 'free' && lifecycle?.subscription && (
+                <div className="mt-5 pt-4 border-t border-border/30 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Renewal policy: manual</p>
+                    <p className="text-[11px] text-muted">No automatic debit mandate is stored.</p>
+                  </div>
+                  <button disabled={lifecycleBusy} onClick={() => toggleCancellation(Boolean(lifecycle.subscription.cancel_at_period_end))}
+                    className="px-3 py-2 rounded-xl border border-border/40 text-xs font-black text-foreground hover:border-accent/50 disabled:opacity-50">
+                    {lifecycle.subscription.cancel_at_period_end ? 'Keep subscription' : 'Cancel at expiry'}
+                  </button>
+                </div>
+              )}
 
             </>
           )}
@@ -321,7 +363,8 @@ export default function SubscriptionPage() {
                   <th className="pb-2 pr-4">Plan</th>
                   <th className="pb-2 pr-4">Amount</th>
                   <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Reference</th>
+                  <th className="pb-2 pr-4">Reference</th>
+                  <th className="pb-2">Receipt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -339,8 +382,11 @@ export default function SubscriptionPage() {
                     <td className="py-2.5 pr-4">
                       <PaymentStatusBadge status={p.status} />
                     </td>
-                    <td className="py-2.5 text-muted font-mono text-[11px] truncate max-w-[160px]" title={p.reference}>
+                    <td className="py-2.5 pr-4 text-muted font-mono text-[11px] truncate max-w-[160px]" title={p.reference}>
                       {p.reference}
+                    </td>
+                    <td className="py-2.5">
+                      {p.receipt_number ? <button onClick={() => downloadReceipt(p.receipt_number!)} className="text-xs font-black text-accent hover:underline">Download</button> : <span className="text-muted">—</span>}
                     </td>
                   </tr>
                 ))}

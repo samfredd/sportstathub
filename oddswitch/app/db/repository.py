@@ -20,7 +20,6 @@ from app.db.models import (
 )
 from app.schemas.enums import JobStatus
 
-
 # ── Job Repository ──────────────────────────────────────────────────────────
 
 
@@ -37,7 +36,7 @@ class JobRepository:
         target_bookmaker: str,
         booking_code: str,
         callback_url: str | None = None,
-        api_key_id: str | None = None,
+        api_key_id: str,
     ) -> TranslationJob:
         """Create a new translation job in QUEUED state."""
         job = TranslationJob(
@@ -52,9 +51,13 @@ class JobRepository:
         await self.session.flush()
         return job
 
-    async def get_by_id(self, job_id: str) -> TranslationJob | None:
-        """Fetch a job by its ID."""
-        return await self.session.get(TranslationJob, job_id)
+    async def get_by_id(self, job_id: str, api_key_id: str | None = None) -> TranslationJob | None:
+        """Fetch a job, scoped to its tenant for every API-facing read."""
+        stmt = select(TranslationJob).where(TranslationJob.id == job_id)
+        if api_key_id is not None:
+            stmt = stmt.where(TranslationJob.api_key_id == api_key_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def update_status(
         self, job_id: str, status: JobStatus
@@ -103,6 +106,7 @@ class JobRepository:
         source_bookmaker: str,
         booking_code: str,
         target_bookmaker: str,
+        api_key_id: str,
     ) -> TranslationJob | None:
         """Find an existing active job for the same translation request."""
         stmt = (
@@ -111,6 +115,7 @@ class JobRepository:
                 TranslationJob.source_bookmaker == source_bookmaker,
                 TranslationJob.booking_code == booking_code,
                 TranslationJob.target_bookmaker == target_bookmaker,
+                TranslationJob.api_key_id == api_key_id,
                 TranslationJob.status.in_([JobStatus.QUEUED, JobStatus.PROCESSING]),
             )
             .order_by(TranslationJob.created_at.desc())

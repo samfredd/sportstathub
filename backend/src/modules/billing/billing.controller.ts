@@ -24,10 +24,35 @@ export function createBillingController(service) {
     return ok(reply, data);
   }
 
+  async function getSubscription(request, reply) {
+    return ok(reply, await service.getSubscription(request.user));
+  }
+
+  async function cancelSubscription(request, reply) {
+    return ok(reply, await service.cancelSubscription(request.user, request.body?.reason));
+  }
+
+  async function restoreSubscription(request, reply) {
+    return ok(reply, await service.restoreSubscription(request.user));
+  }
+
+  async function getReceipt(request, reply) {
+    return ok(reply, await service.getReceipt(request.user, request.params.receiptNumber));
+  }
+
+  async function repairEntitlement(request, reply) {
+    return ok(reply, await service.repairEntitlement(request.user, request.body));
+  }
+
   return {
     listPlans,
     initializePaystack,
     verifyPaystack,
     listHistory,
+    getSubscription,
+    cancelSubscription,
+    restoreSubscription,
+    getReceipt,
+    repairEntitlement,
   };
 }

@@ -5,6 +5,7 @@ import { MatchAnalyticsTabs, ActiveStatBadge } from "./_tabs";
 import type { FormMatch } from "./_tabs";
 import LeftLeagueSidebar from "@/components/LeftLeagueSidebar";
 import RightStatsSidebar from "@/components/RightStatsSidebar";
+import { SaveMatchButton } from "@/components/SaveMatchButton";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -285,7 +286,9 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           <span className="text-[11px] font-bold text-muted">{match.league}</span>
           <span className="text-muted/30">·</span>
           <span className="text-[11px] text-muted/70">{match.country}</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {!hasStarted&&<SaveMatchButton fixtureId={id} sport="football" startsAt={matchJson.data.fixture.date}
+              homeTeam={match.homeTeam} awayTeam={match.awayTeam} league={match.league}/>}
             <StatusPill match={match} isFinished={isFinished} />
           </div>
         </div>

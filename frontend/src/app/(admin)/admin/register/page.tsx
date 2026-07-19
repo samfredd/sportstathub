@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { adminApi, decodeJwt } from "@/lib/adminApi";
-import { storeAdminToken } from "@/lib/adminSession";
+import { adminApi } from "@/lib/adminApi";
 
 function friendlyError(msg: string): string {
   if (!msg) return "Something went wrong. Please try again.";
@@ -53,19 +52,14 @@ export default function AdminRegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await adminApi.register(
+      await adminApi.register(
         form.username.trim().toLowerCase(),
         form.email.trim().toLowerCase(),
         form.password,
         form.inviteKey,
       );
-      const token = res?.data?.token ?? res?.token;
-      if (!token) throw new Error("No token received");
-      const payload = decodeJwt(token);
-      if (!payload || payload.role !== "admin") throw new Error("Account created but role is not admin.");
-      storeAdminToken(token);
       setDone(true);
-      setTimeout(() => router.replace("/admin"), 1800);
+      setTimeout(() => router.replace("/admin/login"), 1800);
     } catch (err: any) {
       setError(friendlyError(err.message || "Registration failed."));
     } finally {

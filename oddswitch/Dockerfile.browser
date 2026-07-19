@@ -2,9 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 ENV PYTHONPATH=/app
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # System deps (including browser dependencies)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     gcc libpq-dev \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libxkbcommon0 libxdamage1 libgbm1 libpango-1.0-0 \
@@ -19,10 +20,18 @@ RUN pip install --no-cache-dir -r requirements/browser.txt
 
 # Install Playwright browsers
 RUN playwright install chromium
+RUN python -m pip uninstall -y setuptools wheel jaraco.context \
+ && rm -rf /usr/local/lib/python3.11/site-packages/pip* /usr/local/bin/pip* \
+ && apt-get purge -y --auto-remove gcc libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 # Application code
 COPY app/ app/
 COPY pyproject.toml .
+
+RUN useradd --system --uid 10001 --create-home appuser \
+ && chown -R appuser:appuser /app /ms-playwright
+USER appuser
 
 CMD ["celery", "-A", "app.queue.celery_app", "worker", \
      "--loglevel=info", "--queues=browser", \

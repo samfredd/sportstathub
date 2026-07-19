@@ -53,6 +53,7 @@ import structlog
 
 from app.browser.adapters.base import BookmakerAdapter
 from app.browser.stealth import random_delay
+from app.core.redaction import sensitive_fingerprint
 from app.schemas.canonical import RawLeg, RawSlip
 
 logger = structlog.get_logger()
@@ -148,7 +149,7 @@ class Bet9jaAdapter(BookmakerAdapter):
         DOM verified: .betslip__match contains .betslip__match-head (event name)
         and .betslip__match-body with .betslip__match-section per selection.
         """
-        logger.info("bet9ja_resolve_start", code=code)
+        logger.info("bet9ja_resolve_start", code_ref=sensitive_fingerprint(code))
         page = await self._get_page()
 
         # Step 1: Navigate (print is already suppressed via init script)
@@ -163,14 +164,14 @@ class Bet9jaAdapter(BookmakerAdapter):
         try:
             await page.wait_for_selector(SEL_MATCH, timeout=BETSLIP_LOAD_TIMEOUT)
         except Exception:
-            logger.warning("bet9ja_no_matches_initial", code=code)
+            logger.warning("bet9ja_no_matches_initial", code_ref=sensitive_fingerprint(code))
             # Retry: reload the page
             await page.reload(timeout=NAV_TIMEOUT)
             await random_delay(3000, 5000)
             try:
                 await page.wait_for_selector(SEL_MATCH, timeout=BETSLIP_LOAD_TIMEOUT)
             except Exception:
-                logger.error("bet9ja_no_matches_after_retry", code=code)
+                logger.error("bet9ja_no_matches_after_retry", code_ref=sensitive_fingerprint(code))
                 return RawSlip(
                     bookmaker="bet9ja",
                     booking_code=code,
@@ -475,21 +476,21 @@ class Bet9jaAdapter(BookmakerAdapter):
         payload_str = "BETSLIP=" + urllib.parse.quote(json.dumps(betslip_json, separators=(',', ':'))) + "&IS_PASSBET=0"
 
         # Step 5: Execute POST
-        result = await page.evaluate(f"""async (payload) => {{
-            try {{
-                const res = await fetch('https://apigw.bet9ja.com/sportsbook/placebet/BookABetV2?source=desktop', {{
+        result = await page.evaluate("""async (payload) => {
+            try {
+                const res = await fetch('https://apigw.bet9ja.com/sportsbook/placebet/BookABetV2?source=desktop', {
                     method: 'POST',
-                    headers: {{
+                    headers: {
                         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                         'Accept': 'application/json, text/javascript, */*; q=0.01'
-                    }},
+                    },
                     body: payload
-                }});
+                });
                 return await res.json();
-            }} catch(e) {{
+            } catch(e) {
                 return e.toString();
-            }}
-        }}""", payload_str)
+            }
+        }""", payload_str)
 
         if isinstance(result, str) or result.get("status") != 1:
             raise RuntimeError(f"Bet9ja API generation failed: {result}")
@@ -498,7 +499,7 @@ class Bet9jaAdapter(BookmakerAdapter):
         if not code:
             raise RuntimeError("Bet9ja API did not return a RIS code")
 
-        logger.info("bet9ja_code_generated", code=code)
+        logger.info("bet9ja_code_generated", code_ref=sensitive_fingerprint(code))
         return code
 
     async def _fetch_all_events(self, page: Any) -> list[dict]:

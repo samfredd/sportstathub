@@ -223,6 +223,15 @@ export function createAdminController(service) {
     return ok(reply, await service.getSubscriptionFunnel());
   }
 
+  async function getCreatorApplications(request, reply) {
+    return ok(reply, await service.listCreatorApplications(request.query.status || 'pending'));
+  }
+
+  async function reviewCreatorApplication(request, reply) {
+    return ok(reply, await service.reviewCreatorApplication(
+      request.user.id, parseInt(request.params.id), request.body));
+  }
+
   // ─── UPDATE USER STATUS ───────────────────────────────────
   async function updateUserStatus(request, reply) {
     const { status } = request.body as any;
@@ -244,6 +253,7 @@ export function createAdminController(service) {
     getFilteredAuditLogs,
     bulkUserAction,
     getSubscriptionFunnel,
+    getCreatorApplications, reviewCreatorApplication,
     updateUserStatus,
   };
 }

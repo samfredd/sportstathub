@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.exceptions import SUPPORTED_BOOKMAKERS
 
-
 # ── Requests ─────────────────────────────────────────────────────────────────
 
 

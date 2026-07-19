@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isAuthed } from "@/lib/session";
@@ -29,6 +29,8 @@ export default function MobileBottomBar() {
   const pathname    = usePathname();
   const [open, setOpen]   = useState(false);
   const [authed, setAuthed] = useState(false);
+  const sheetRef=useRef<HTMLDivElement>(null);
+  const moreButtonRef=useRef<HTMLButtonElement>(null);
 
   /* Read auth state on mount + react to login/logout */
   useEffect(() => {
@@ -40,6 +42,21 @@ export default function MobileBottomBar() {
 
   /* Close sheet on navigation */
   useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(()=>{
+    if(!open)return;
+    const trigger=moreButtonRef.current;
+    const previousOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
+    const focusable=()=>Array.from(sheetRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])')??[]);
+    focusable()[0]?.focus();
+    function onKeyDown(event:KeyboardEvent){
+      if(event.key==='Escape'){event.preventDefault();setOpen(false);return;}
+      if(event.key!=='Tab')return;const items=focusable();if(!items.length)return;const first=items[0],last=items.at(-1)!;
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    }
+    document.addEventListener('keydown',onKeyDown);
+    return()=>{document.body.style.overflow=previousOverflow;document.removeEventListener('keydown',onKeyDown);trigger?.focus();};
+  },[open]);
 
   const moreActive = open || pathname.startsWith("/dashboard");
 
@@ -47,19 +64,20 @@ export default function MobileBottomBar() {
     <>
       {/* ── Backdrop ── */}
       {open && (
-        <div
+        <button type="button" aria-label="Close more navigation"
           className="fixed inset-0 z-[48] bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
       {/* ── Slide-up sheet ── */}
-      <div
+      {open&&<div ref={sheetRef} role="dialog" aria-modal="true" aria-labelledby="more-navigation-title"
         className={`fixed inset-x-0 bottom-0 z-[49] lg:hidden
           bg-background border-t border-border/50 rounded-t-3xl shadow-2xl
           transition-transform duration-300 ease-out
-          ${open ? "translate-y-0" : "translate-y-full"}`}
+          translate-y-0`}
       >
+        <h2 id="more-navigation-title" className="sr-only">More navigation</h2>
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-9 h-1 rounded-full bg-border/60" />
@@ -122,7 +140,7 @@ export default function MobileBottomBar() {
           </div>
 
         </div>
-      </div>
+      </div>}
 
       {/* ── Fixed bottom nav ── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-xl border-t border-border">
@@ -149,6 +167,7 @@ export default function MobileBottomBar() {
 
           {/* More button */}
           <button
+            ref={moreButtonRef}
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Close more navigation" : "Open more navigation"}
             aria-expanded={open}

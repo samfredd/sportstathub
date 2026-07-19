@@ -1,28 +1,33 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+
+type MailerConfig = {
+  resendApiKey: string | null;
+  emailFrom: string;
+  emailFromName: string;
+  contactEmail: string;
+};
+
+type ResendClient = Pick<Resend, 'emails'>;
 
 /**
- * Mailer Service — owns the nodemailer transport and all email templates.
+ * Mailer Service — owns the Resend API client and all email templates.
  *
  * Built as a factory so the transport config is injected rather than read
  * from process.env directly. This makes it mockable in tests and reusable
  * across different environment configs without any module-level side effects.
  *
- * Expected config shape:
- *   smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass,
- *   emailFrom, emailFromName
+ * The optional client injection keeps delivery tests fully offline.
  */
-export function createMailerService(config) {
-  const transporter = nodemailer.createTransport({
-    host:   config.smtpHost,
-    port:   config.smtpPort,
-    secure: config.smtpSecure, // true for port 465 (SSL), false for 587 (STARTTLS)
-    auth: {
-      user: config.smtpUser,
-      pass: config.smtpPass,
-    },
-  });
+export function createMailerService(config: MailerConfig, client?: ResendClient) {
+  if (!config.resendApiKey && !client) throw new Error('RESEND_API_KEY is not configured');
+  const resend = client ?? new Resend(config.resendApiKey!);
+  const from = `${config.emailFromName} <${config.emailFrom}>`;
 
-  const FROM = `"${config.emailFromName}" <${config.emailFrom}>`;
+  async function deliver(payload: Parameters<ResendClient['emails']['send']>[0]) {
+    const { data, error } = await resend.emails.send(payload);
+    if (error) throw new Error(`Resend delivery failed: ${error.message}`);
+    return data;
+  }
 
   // ── Public methods ───────────────────────────────────────────────────────
 
@@ -31,9 +36,9 @@ export function createMailerService(config) {
    * plainOtp is the raw code — it must already have been generated before
    * this is called. Never passes through the hash.
    */
-  async function sendOtpEmail({ to, otp }) {
-    await transporter.sendMail({
-      from:    FROM,
+  async function sendOtpEmail({ to, otp }: { to: string; otp: string }) {
+    return deliver({
+      from,
       to,
       subject: 'Your verification code',
       text:    buildOtpText(otp),
@@ -45,9 +50,9 @@ export function createMailerService(config) {
    * Send a welcome email after successful OTP verification.
    * Fire-and-forget safe — the caller should not await this on the critical path.
    */
-  async function sendWelcomeEmail({ to, username }) {
-    await transporter.sendMail({
-      from:    FROM,
+  async function sendWelcomeEmail({ to, username }: { to: string; username: string }) {
+    return deliver({
+      from,
       to,
       subject: 'Welcome — your account is ready',
       text:    buildWelcomeText(username),
@@ -55,9 +60,9 @@ export function createMailerService(config) {
     });
   }
 
-  async function sendPasswordResetEmail({ to, otp }) {
-    await transporter.sendMail({
-      from:    FROM,
+  async function sendPasswordResetEmail({ to, otp }: { to: string; otp: string }) {
+    return deliver({
+      from,
       to,
       subject: 'Your password reset code',
       text:    buildPasswordResetText(otp),
@@ -65,27 +70,19 @@ export function createMailerService(config) {
     });
   }
 
-  /**
-   * Verify the SMTP connection at startup.
-   * Throws if the transport cannot authenticate — use this in an onReady hook
-   * to fail fast rather than discovering the misconfiguration on the first email.
-   */
-  async function sendContactEmail({ name, email, message }) {
-    await transporter.sendMail({
-      from:    FROM,
-      to:      config.emailFrom,
-      replyTo: `"${name}" <${email}>`,
-      subject: `Contact form: ${name}`,
+  async function sendContactEmail({ name, email, message }: { name: string; email: string; message: string }) {
+    const safeName = name.replace(/[\r\n]+/g, ' ').trim();
+    return deliver({
+      from,
+      to:      config.contactEmail,
+      replyTo: email,
+      subject: `Contact form: ${safeName}`,
       text:    `Name: ${name}\nEmail: ${email}\n\n${message}`,
       html:    buildContactHtml({ name, email, message }),
     });
   }
 
-  async function verifyConnection() {
-    await transporter.verify();
-  }
-
-  return { sendOtpEmail, sendWelcomeEmail, sendPasswordResetEmail, sendContactEmail, verifyConnection };
+  return { sendOtpEmail, sendWelcomeEmail, sendPasswordResetEmail, sendContactEmail };
 }
 
 // ── Email templates ──────────────────────────────────────────────────────────
@@ -175,7 +172,9 @@ function buildWelcomeText(username) {
 }
 
 function buildContactHtml({ name, email, message }) {
-  const escaped = message.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const escaped = escapeHtml(message).replace(/\n/g, '<br/>');
   return `
     <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head>
     <body style="margin:0;padding:40px;background:#f4f4f4;font-family:Arial,sans-serif;">
@@ -185,14 +184,20 @@ function buildContactHtml({ name, email, message }) {
           <p style="margin:0;color:#fff;font-size:18px;font-weight:700;">New Contact Form Submission</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 8px;color:#374151;"><strong>Name:</strong> ${name}</p>
-          <p style="margin:0 0 16px;color:#374151;"><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+          <p style="margin:0 0 8px;color:#374151;"><strong>Name:</strong> ${safeName}</p>
+          <p style="margin:0 0 16px;color:#374151;"><strong>Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a></p>
           <p style="margin:0 0 8px;color:#374151;font-weight:700;">Message:</p>
           <p style="margin:0;color:#374151;line-height:1.6;">${escaped}</p>
         </td></tr>
       </table>
     </body></html>
   `.trim();
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[character]!);
 }
 
 function buildWelcomeHtml(username) {

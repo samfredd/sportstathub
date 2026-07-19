@@ -5,7 +5,24 @@ import {
 } from "../helpers/auth.helpers.js";
 import config from "../../../config/env.config.js";
 import { createMailerService } from "../../../modules/mailer/mailer.service.js";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import {
+  REFRESH_COOKIE_NAME,
+  clearSessionCookies,
+  createSession,
+  revokeAllUserSessions,
+  revokePresentedSession,
+  rotateSession,
+  setAccessCookie,
+} from "../../../modules/auth/session.service.js";
+import {
+  decryptMfaSecret,
+  encryptMfaSecret,
+  enrollmentUri,
+  generateRecoveryCodes,
+  generateTotpSecret,
+  verifyTotp,
+} from "../../../modules/auth/mfa.service.js";
 
 // OTP lifetime (seconds)
 // Tradeoff: longer = better UX, shorter = more secure
@@ -30,8 +47,6 @@ const RESET_MAX_ATTEMPTS = 5;
 const LOGIN_MAX_ATTEMPTS = 8;
 const LOGIN_LOCKOUT_WINDOW = 900; // 15 minutes
 
-const IS_PROD = process.env.NODE_ENV === "production";
-
 // Precomputed once and reused so a login attempt against a non-existent (or
 // OAuth-only, password-less) account still runs a real bcrypt comparison —
 // otherwise returning immediately for "no such user" is measurably faster
@@ -50,150 +65,32 @@ function getDummyHash(): Promise<string> {
  * (XSS-resistant). The token is still returned in the response body for any
  * non-browser API client. Frontend clients should rely on the cookie.
  */
-export function setAuthCookie(reply: any, token: string) {
-  reply.setCookie("token", token, {
-    httpOnly: true,
-    secure: IS_PROD,          // HTTPS-only in production
-    sameSite: "lax",          // sent on same-site requests (incl. localhost dev)
-    path: "/",
-    maxAge: config.jwtExpiration, // seconds
-  });
-}
-
-function clearAuthCookie(reply: any) {
-  reply.clearCookie("token", { path: "/" });
-}
-
-// ── Refresh tokens ─────────────────────────────────────────────────────────
-//
-// The access-token cookie above is short-lived (config.jwtExpiration, ~15
-// min) so a stolen/leaked cookie has a small blast radius. The refresh token
-// is what lets a session survive past that without forcing the user to
-// log in again: it's a long-lived, single-use, revocable credential stored
-// server-side (Redis), scoped narrowly to /auth/* so it isn't sent on every
-// request like the access-token cookie is.
-//
-// Only its SHA-256 hash is stored — mirroring how OTPs are hashed — so a
-// Redis read (backup, log, replica) can't hand out a usable token directly.
-
-const REFRESH_COOKIE_NAME = "refresh_token";
-
-function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
-
-async function issueRefreshToken(redis: any, userId: number): Promise<string> {
-  const token = crypto.randomBytes(32).toString("hex");
-  await redis.setex(`refresh:${hashToken(token)}`, config.refreshTokenExpiration, String(userId));
-  return token;
-}
-
-async function revokeRefreshToken(redis: any, token?: string): Promise<void> {
-  if (!token) return;
-  await redis.del(`refresh:${hashToken(token)}`);
-}
-
-function setRefreshCookie(reply: any, token: string) {
-  reply.setCookie(REFRESH_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: IS_PROD,
-    sameSite: "lax",
-    path: "/auth", // only sent back on /auth/refresh and /auth/logout, not every request
-    maxAge: config.refreshTokenExpiration,
-  });
-}
-
-function clearRefreshCookie(reply: any) {
-  reply.clearCookie(REFRESH_COOKIE_NAME, { path: "/auth" });
-}
-
-/**
- * Issue a full session for a user: signs a short-lived access token into the
- * httpOnly cookie, and a long-lived refresh token into its own httpOnly
- * cookie. Every login path (password, OTP, OAuth, admin) should go through
- * this so they can't drift out of sync with each other.
- */
-export async function issueSession(request: any, reply: any, user: any): Promise<string> {
-  const token = request.server.jwt.sign({ id: user.id, email: user.email, role: user.role });
-  setAuthCookie(reply, token);
-
-  const refreshToken = await issueRefreshToken(request.server.redis, user.id);
-  setRefreshCookie(reply, refreshToken);
-
-  return token;
-}
+export const setAuthCookie = setAccessCookie;
+export const issueSession = createSession;
 
 
 // ================= REGISTER =================
 export async function register(request, reply) {
-  // Use a dedicated DB client to control lifecycle
-  const db = await request.server.db.connect();
-  let createdUser = false;
-
   try {
     const { username, email, password } = request.body;
-
-    // Normalize inputs → prevents duplicate logical users
     const formattedUsername = username.trim().toLowerCase();
     const formattedEmail = email.trim().toLowerCase();
-
-    // Check if user already exists
-    // NOTE: This is NOT relied on for uniqueness (DB constraint is)
-    let { rows: existing } = await db.query(
-      "SELECT id, is_verified FROM users WHERE email = $1",
-      [formattedEmail]
-    );
-
-    let user;
-
-    if (existing.length === 0) {
-      // Hash password before storing (never store raw password)
-      const hashedPassword = await hashPassword(password);
-
-      // Insert user safely
-      // ON CONFLICT ensures no duplicate even under race conditions
-      await db.query(
-        `INSERT INTO users (username, email, password, role, is_verified)
-         VALUES ($1, $2, $3, $4, FALSE)
-         ON CONFLICT (email) DO NOTHING`,
-        [formattedUsername, formattedEmail, hashedPassword, "user"]
-      );
-      createdUser = true;
-
-      // Re-fetch user to ensure we have the row (whether inserted now or earlier)
-      const result = await db.query(
-        "SELECT id, is_verified FROM users WHERE email = $1",
-        [formattedEmail]
-      );
-
-      user = result.rows[0];
-    } else {
-      user = existing[0];
-    }
-
-    // If already verified → stop immediately, but respond exactly like the
-    // generic success path below (not a distinguishable 409). A different
-    // status code here would let an attacker enumerate which emails already
-    // have a verified account — the same leak the generic response two
-    // branches down is specifically designed to avoid.
-    if (user.is_verified) {
+    const { rows: existing } = await request.server.db.query(
+      "SELECT id FROM users WHERE email = $1 OR username = $2", [formattedEmail, formattedUsername]);
+    if (existing.length) {
       return reply.status(200).send({
         status: "success",
         message: "If the email exists, a verification code has been sent",
       });
     }
 
-    // OTP disabled: auto-verify and return JWT immediately
+    const hashedPassword = await hashPassword(password);
     if (!config.requireOtp) {
-      await db.query(
-        "UPDATE users SET is_verified = TRUE WHERE email = $1",
-        [formattedEmail]
-      );
-      const { rows: verified } = await db.query(
-        "SELECT id, username, email, role FROM users WHERE email = $1",
-        [formattedEmail]
-      );
-      const u = verified[0];
+      const { rows } = await request.server.db.query(
+        `INSERT INTO users (username,email,password,role,is_verified)
+         VALUES ($1,$2,$3,'user',TRUE) RETURNING *`,
+        [formattedUsername, formattedEmail, hashedPassword]);
+      const u = rows[0];
       const token = await issueSession(request, reply, u);
       return reply.status(200).send({
         status: "success",
@@ -202,10 +99,6 @@ export async function register(request, reply) {
       });
     }
 
-    // Rate limiting OTP requests
-    // Prevents:
-    // - Email spam
-    // - Resource exhaustion
     const resendKey = `otp_req:${formattedEmail}`;
     if (await request.server.redis.get(resendKey)) {
       return reply.status(429).send({
@@ -213,35 +106,30 @@ export async function register(request, reply) {
       });
     }
 
-    const otpKey = `otp:${formattedEmail}`;
-    const attemptsKey = `otp_attempts:${formattedEmail}`;
-
     const otp = generateOTP();
     const hashedOTP = await hashPassword(otp);
+    const registrationNonce = crypto.randomBytes(32).toString('base64url');
+    const pendingKey = `pending_registration:${crypto.createHash('sha256').update(registrationNonce).digest('hex')}`;
+    const pending = {
+      email: formattedEmail,
+      username: formattedUsername,
+      passwordHash: hashedPassword,
+      otpHash: hashedOTP,
+      createdAt: new Date().toISOString(),
+    };
+    await request.server.redis.setex(pendingKey, OTP_VALIDITY, JSON.stringify(pending));
+    await request.server.redis.setex(`${pendingKey}:attempts`, OTP_VALIDITY, 0);
+    reply.setCookie('pending_registration', registrationNonce, {
+      httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict',
+      path: '/auth/verify-otp', maxAge: OTP_VALIDITY,
+    });
 
-    try {
-      // Store a fresh OTP with expiry. Only the hash is stored, so resends
-      // must generate and email a new code rather than pretending to resend
-      // a code that can no longer be read from Redis.
-      await request.server.redis.setex(otpKey, OTP_VALIDITY, hashedOTP);
-      await request.server.redis.setex(attemptsKey, OTP_VALIDITY, 0);
-    } catch (err) {
-      if (createdUser) {
-        await db.query("DELETE FROM users WHERE email = $1", [formattedEmail]);
-      }
-      throw err;
-    }
-
-    if (config.smtpHost) {
+    if (config.resendApiKey) {
       try {
         const mailer = createMailerService(config);
         await mailer.sendOtpEmail({ to: formattedEmail, otp });
       } catch (err) {
-        await request.server.redis.del(otpKey);
-        await request.server.redis.del(attemptsKey);
-        if (createdUser) {
-          await db.query("DELETE FROM users WHERE email = $1", [formattedEmail]);
-        }
+        await request.server.redis.del(pendingKey, `${pendingKey}:attempts`);
         request.log.error({ err }, "Failed to send OTP email");
         return reply.status(502).send({
           status: "error",
@@ -273,9 +161,6 @@ export async function register(request, reply) {
       message: "Internal server error during registration",
     });
 
-  } finally {
-    // Always release DB connection
-    db.release();
   }
 }
 
@@ -284,48 +169,15 @@ export async function register(request, reply) {
 export async function verifyOTP(request, reply) {
   try {
     const { email, otp } = request.body;
-
-    // Normalize input
     const formattedEmail = email.trim().toLowerCase();
-
-    const otpKey = `otp:${formattedEmail}`;
-    const attemptsKey = `otp_attempts:${formattedEmail}`;
-
-    // Fetch user early → enables idempotency
-    const { rows } = await request.server.db.query(
-      "SELECT id, username, email, role, created_at, is_verified FROM users WHERE email = $1",
-      [formattedEmail]
-    );
-
-    const user = rows[0];
-
-    // Generic error → avoids leaking whether user exists
-    if (!user) {
-      return reply.status(400).send({ error: "Invalid request" });
-    }
-
-    // Already verified → do NOT issue a token here. The OTP has not been
-    // checked at this point, so returning a session would let anyone who
-    // knows a registered email obtain a JWT for that account (auth bypass).
-    // Verified users must sign in through /auth/login with their password.
-    if (user.is_verified) {
-      return reply.status(409).send({
-        error: "Account is already verified — please sign in",
-      });
-    }
-
-    // Fetch OTP from Redis
-    const hashedOTP = await request.server.redis.get(otpKey);
-
-    if (!hashedOTP) {
-      return reply.status(400).send({
-        error: "OTP expired or invalid",
-      });
-    }
-
-    // Atomically increment before checking — prevents concurrent requests from
-    // all passing a GET-then-compare race. INCR is atomic in Redis.
-    const attempts = await request.server.redis.incr(attemptsKey);
+    const nonce = request.cookies?.pending_registration;
+    if (!nonce) return reply.status(400).send({ error: 'Invalid request' });
+    const pendingKey = `pending_registration:${crypto.createHash('sha256').update(nonce).digest('hex')}`;
+    const rawPending = await request.server.redis.get(pendingKey);
+    if (!rawPending) return reply.status(400).send({ error: 'Verification code expired or invalid' });
+    const pending = JSON.parse(rawPending);
+    if (pending.email !== formattedEmail) return reply.status(400).send({ error: 'Invalid request' });
+    const attempts = await request.server.redis.incr(`${pendingKey}:attempts`);
 
     if (attempts > OTP_MAX_ATTEMPTS) {
       return reply.status(429).send({
@@ -334,10 +186,7 @@ export async function verifyOTP(request, reply) {
     }
 
     // Compare provided OTP against stored hash
-    const isMatch = await comparePasswords(
-      otp.toUpperCase(),
-      hashedOTP
-    );
+    const isMatch = await comparePasswords(otp.toUpperCase(), pending.otpHash);
 
     if (!isMatch) {
       return reply.status(400).send({
@@ -345,18 +194,26 @@ export async function verifyOTP(request, reply) {
       });
     }
 
-    // OTP correct → cleanup ephemeral state
-    await request.server.redis.del(otpKey);
-    await request.server.redis.del(attemptsKey);
-
-    // Activate account (persistent state change)
-    await request.server.db.query(
-      "UPDATE users SET is_verified = TRUE WHERE email = $1",
-      [formattedEmail]
-    );
+    const lockKey = `${pendingKey}:lock`;
+    const locked = await request.server.redis.set(lockKey, '1', 'EX', 30, 'NX');
+    if (!locked) return reply.status(409).send({ error: 'Verification already in progress' });
+    let user;
+    try {
+      const { rows } = await request.server.db.query(
+        `INSERT INTO users (username,email,password,role,is_verified)
+         VALUES ($1,$2,$3,'user',TRUE)
+         ON CONFLICT DO NOTHING RETURNING *`,
+        [pending.username, pending.email, pending.passwordHash]);
+      user = rows[0];
+      if (!user) return reply.status(409).send({ error: 'Unable to complete registration' });
+      await request.server.redis.del(pendingKey, `${pendingKey}:attempts`);
+      reply.clearCookie('pending_registration', { path: '/auth/verify-otp' });
+    } finally {
+      await request.server.redis.del(lockKey);
+    }
 
     // Fire-and-forget welcome email — never block the response on email delivery
-    if (config.smtpHost) {
+    if (config.resendApiKey) {
       const mailer = createMailerService(config);
       mailer.sendWelcomeEmail({ to: user.email, username: user.username }).catch(() => {});
     }
@@ -417,7 +274,7 @@ export async function forgotPassword(request, reply) {
       await request.server.redis.setex(resetKey, RESET_VALIDITY, hashedOTP);
       await request.server.redis.setex(attemptsKey, RESET_VALIDITY, 0);
 
-      if (config.smtpHost) {
+      if (config.resendApiKey) {
         const mailer = createMailerService(config);
         await mailer.sendPasswordResetEmail({ to: formattedEmail, otp });
       }
@@ -478,6 +335,12 @@ export async function resetPassword(request, reply) {
 
     if (rowCount === 0) {
       return reply.status(400).send({ error: "Invalid request" });
+    }
+
+    const { rows: changedUsers } = await request.server.db.query(
+      'SELECT id FROM users WHERE email = $1', [formattedEmail]);
+    if (changedUsers[0]) {
+      await revokeAllUserSessions(request.server.db, changedUsers[0].id, 'password_reset');
     }
 
     return reply.status(200).send({
@@ -558,6 +421,18 @@ export async function login(request, reply) {
     // Successful login — reset the lockout counter
     await request.server.redis.del(attemptsKey);
 
+    // Administrator passwords are only the first factor. A narrowly-scoped,
+    // five-minute token may proceed to enrollment/verification but cannot be
+    // used as an access token because it has no normal session id/version.
+    if (user.role === 'admin') {
+      const mfaToken = request.server.jwt.sign(
+        { id: user.id, purpose: 'admin_mfa' }, { expiresIn: 300 });
+      return reply.status(202).send({
+        status: 'mfa_required',
+        data: { mfaRequired: true, enrollmentRequired: !user.mfa_enrolled_at, mfaToken },
+      });
+    }
+
     // Issue token
     const token = await issueSession(request, reply, user);
 
@@ -585,63 +460,122 @@ export async function login(request, reply) {
   }
 }
 
+function verifyMfaChallenge(request: any): { id: number; purpose: string } {
+  const token = request.body?.mfaToken;
+  if (!token) throw Object.assign(new Error('Invalid MFA challenge'), { statusCode: 401 });
+  const payload = request.server.jwt.verify(token) as any;
+  if (payload?.purpose !== 'admin_mfa' || !payload?.id) {
+    throw Object.assign(new Error('Invalid MFA challenge'), { statusCode: 401 });
+  }
+  return payload;
+}
 
-// ================= ADMIN REGISTER =================
-export async function registerAdmin(request, reply) {
+export async function beginAdminMfaEnrollment(request: any, reply: any) {
   try {
-    const { username, email, password, inviteKey } = request.body;
-
-    // Gate: invite key must be set in env and must match
-    if (!config.adminInviteKey) {
-      return reply.status(503).send({ error: "Admin registration is not enabled on this server." });
-    }
-
-    // Constant-time comparison prevents timing attacks
-    const keyBuffer   = Buffer.from(inviteKey);
-    const validBuffer = Buffer.from(config.adminInviteKey);
-    const keysMatch   = keyBuffer.length === validBuffer.length &&
-                        crypto.timingSafeEqual(keyBuffer, validBuffer);
-
-    if (!keysMatch) {
-      return reply.status(403).send({ error: "Invalid invite key." });
-    }
-
-    const formattedUsername = username.trim().toLowerCase();
-    const formattedEmail    = email.trim().toLowerCase();
-
-    // Check for existing account
-    const { rows: existing } = await request.server.db.query(
-      "SELECT id FROM users WHERE email = $1 OR username = $2",
-      [formattedEmail, formattedUsername]
-    );
-    if (existing.length > 0) {
-      return reply.status(409).send({ error: "An account with that email or username already exists." });
-    }
-
-    const hashedPassword = await hashPassword(password);
-
+    const challenge = verifyMfaChallenge(request);
     const { rows } = await request.server.db.query(
-      `INSERT INTO users (username, email, password, role, is_verified)
-       VALUES ($1, $2, $3, 'admin', TRUE)
-       RETURNING id, username, email, role, created_at`,
-      [formattedUsername, formattedEmail, hashedPassword]
-    );
-
+      `SELECT id,email,role,status,mfa_enrolled_at FROM users WHERE id = $1`, [challenge.id]);
     const user = rows[0];
-
-    const token = await issueSession(request, reply, user);
-
-    request.log.info(`[ADMIN_REGISTER] New admin account created: ${formattedEmail}`);
-
-    return reply.status(201).send({
-      status: "success",
-      message: "Admin account created successfully.",
-      data: { token, user: { id: user.id, email: user.email, username: user.username, role: user.role } },
+    if (!user || user.role !== 'admin' || user.status !== 'active' || user.mfa_enrolled_at) {
+      return reply.status(400).send({ error: 'Unable to start MFA enrollment' });
+    }
+    const secret = generateTotpSecret();
+    await request.server.db.query(
+      `UPDATE users SET mfa_totp_secret_encrypted = $1, mfa_required = TRUE WHERE id = $2`,
+      [encryptMfaSecret(secret), user.id]);
+    await request.server.db.query(
+      `INSERT INTO admin_logs (admin_id, action, target_type, target_id, metadata)
+       VALUES ($1,'admin.mfa_enrollment_started','user',$1,'{}'::jsonb)`, [user.id]).catch(() => {});
+    return reply.status(200).send({
+      status: 'success', data: { secret, uri: enrollmentUri(secret, user.email) },
     });
+  } catch {
+    return reply.status(401).send({ error: 'Invalid or expired MFA challenge' });
+  }
+}
 
-  } catch (error) {
-    request.log.error(error);
-    return reply.status(500).send({ status: "error", message: "Internal server error." });
+export async function verifyAdminMfa(request: any, reply: any) {
+  try {
+    const challenge = verifyMfaChallenge(request);
+    const { rows } = await request.server.db.query(
+      `SELECT * FROM users WHERE id = $1`, [challenge.id]);
+    const user = rows[0];
+    if (!user || user.role !== 'admin' || user.status !== 'active' || !user.mfa_totp_secret_encrypted) {
+      return reply.status(401).send({ error: 'Invalid verification code' });
+    }
+    const attemptsKey = `admin_mfa_attempts:${user.id}`;
+    const attempts = Number(await request.server.redis.incr(attemptsKey));
+    if (attempts === 1) await request.server.redis.expire(attemptsKey, 300);
+    if (attempts > 5) return reply.status(429).send({ error: 'Too many verification attempts' });
+    if (!verifyTotp(decryptMfaSecret(user.mfa_totp_secret_encrypted), request.body.code)) {
+      return reply.status(401).send({ error: 'Invalid verification code' });
+    }
+
+    let recoveryCodes: string[] | undefined;
+    if (!user.mfa_enrolled_at) {
+      const recovery = await generateRecoveryCodes();
+      const client = await request.server.db.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`UPDATE users SET mfa_enrolled_at = NOW(), mfa_required = TRUE WHERE id = $1`, [user.id]);
+        await client.query(`DELETE FROM admin_recovery_codes WHERE user_id = $1`, [user.id]);
+        for (const codeHash of recovery.hashes) {
+          await client.query(`INSERT INTO admin_recovery_codes (user_id, code_hash) VALUES ($1,$2)`, [user.id, codeHash]);
+        }
+        await client.query('COMMIT');
+        recoveryCodes = recovery.plain;
+        user.mfa_enrolled_at = new Date();
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally { client.release(); }
+    }
+    await request.server.redis.del(attemptsKey);
+    const token = await issueSession(request, reply, user);
+    return reply.status(200).send({
+      status: 'success',
+      data: { user: { id: user.id, email: user.email, username: user.username, role: user.role }, recoveryCodes },
+    });
+  } catch (error: any) {
+    request.log.warn({ err: error }, 'Administrator MFA verification failed');
+    return reply.status(error?.statusCode || 401).send({ error: 'Invalid or expired MFA challenge' });
+  }
+}
+
+export async function recoverAdminMfa(request: any, reply: any) {
+  try {
+    const challenge = verifyMfaChallenge(request);
+    const { rows: users } = await request.server.db.query(`SELECT * FROM users WHERE id=$1`, [challenge.id]);
+    const user = users[0];
+    if (!user || user.role !== 'admin' || user.status !== 'active' || !user.mfa_enrolled_at) {
+      return reply.status(401).send({ error: 'Invalid recovery code' });
+    }
+    const attemptsKey = `admin_mfa_recovery_attempts:${user.id}`;
+    const attempts = Number(await request.server.redis.incr(attemptsKey));
+    if (attempts === 1) await request.server.redis.expire(attemptsKey, 900);
+    if (attempts > 5) return reply.status(429).send({ error: 'Too many recovery attempts' });
+    const { rows: codes } = await request.server.db.query(
+      `SELECT id,code_hash FROM admin_recovery_codes WHERE user_id=$1 AND used_at IS NULL`, [user.id]);
+    let matched: any = null;
+    for (const candidate of codes) {
+      if (await comparePasswords(String(request.body.recoveryCode).toUpperCase(), candidate.code_hash)) {
+        matched = candidate; break;
+      }
+    }
+    if (!matched) return reply.status(401).send({ error: 'Invalid recovery code' });
+    const { rowCount } = await request.server.db.query(
+      `UPDATE admin_recovery_codes SET used_at=NOW() WHERE id=$1 AND used_at IS NULL`, [matched.id]);
+    if (!rowCount) return reply.status(401).send({ error: 'Invalid recovery code' });
+    await request.server.redis.del(attemptsKey);
+    await request.server.db.query(
+      `INSERT INTO admin_logs(admin_id,action,target_type,target_id,metadata)
+       VALUES($1,'admin.mfa_recovery_used','user',$1,'{}'::jsonb)`, [user.id]).catch(() => {});
+    await issueSession(request, reply, user);
+    return reply.status(200).send({ status: 'success', data: {
+      user: { id: user.id, email: user.email, username: user.username, role: user.role },
+    } });
+  } catch {
+    return reply.status(401).send({ error: 'Invalid or expired MFA challenge' });
   }
 }
 
@@ -654,38 +588,20 @@ export async function refresh(request, reply) {
       return reply.status(401).send({ status: "error", error: "No refresh token" });
     }
 
-    const key = `refresh:${hashToken(oldToken)}`;
-    const userId = await request.server.redis.get(key);
-
-    // Rotate immediately, whether or not it turns out to be valid — a used or
-    // stale key should never be replayable.
-    await request.server.redis.del(key);
-
-    if (!userId) {
-      clearAuthCookie(reply);
-      clearRefreshCookie(reply);
-      return reply.status(401).send({ status: "error", error: "Refresh token expired or invalid" });
+    const rotated = await rotateSession(request, reply, oldToken);
+    if (rotated.status === 'concurrent') {
+      return reply.status(409).send({ status: 'error', error: 'Refresh already completed by another request' });
     }
-
-    const { rows } = await request.server.db.query(
-      "SELECT id, username, email, role, status FROM users WHERE id = $1",
-      [userId]
-    );
-    const user = rows[0];
-
-    if (!user || (user.status && user.status !== "active")) {
-      clearAuthCookie(reply);
-      clearRefreshCookie(reply);
-      return reply.status(401).send({ status: "error", error: "Account is not active" });
+    if (rotated.status !== 'ok') {
+      clearSessionCookies(reply);
+      return reply.status(401).send({ status: 'error', error: 'Refresh token expired or invalid' });
     }
-
-    const token = await issueSession(request, reply, user);
 
     return reply.status(200).send({
       status: "success",
       data: {
-        token,
-        user: { id: user.id, email: user.email, full_name: user.username, role: user.role },
+        token: rotated.token,
+        user: { id: rotated.user.id, email: rotated.user.email, full_name: rotated.user.username, role: rotated.user.role },
       },
     });
   } catch (error) {
@@ -701,10 +617,7 @@ export async function refresh(request, reply) {
 // ================= LOGOUT =================
 export async function logout(request, reply) {
   const refreshToken = request.cookies?.[REFRESH_COOKIE_NAME];
-  if (refreshToken) {
-    await revokeRefreshToken(request.server.redis, refreshToken).catch(() => {});
-  }
-  clearAuthCookie(reply);
-  clearRefreshCookie(reply);
+  await revokePresentedSession(request, refreshToken).catch(() => {});
+  clearSessionCookies(reply);
   return reply.status(200).send({ status: "success", message: "Logged out" });
 }

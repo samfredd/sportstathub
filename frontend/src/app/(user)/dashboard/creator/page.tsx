@@ -292,9 +292,9 @@ function BecomeCreator({ onSuccess }: { onSuccess: (role: string) => void }) {
     if (!agreed) return;
     setLoading(true); setError("");
     try {
-      const result = await communityApi.becomeCreator() as { role: string };
+      const result = await communityApi.becomeCreator("I want to share transparent, responsible sports analysis with the SportStatHub community.") as { role: string };
       setDone(true);
-      setTimeout(() => onSuccess(result.role ?? "creator"), 1800);
+      setTimeout(() => onSuccess(result.role ?? "creator_pending"), 1800);
     } catch (err: any) { setError(err.message || "Could not process your request"); } finally { setLoading(false); }
   }
 
@@ -302,8 +302,8 @@ function BecomeCreator({ onSuccess }: { onSuccess: (role: string) => void }) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
         <div className="w-16 h-16 bg-success/15 border-2 border-success/30 rounded-2xl flex items-center justify-center text-3xl">🎉</div>
-        <h2 className="text-2xl font-black text-foreground">You&apos;re now a Creator!</h2>
-        <p className="text-muted text-sm">Setting up your creator dashboard…</p>
+        <h2 className="text-2xl font-black text-foreground">Application submitted</h2>
+        <p className="text-muted text-sm">An administrator will review your creator application. You may need to sign in again after the role update.</p>
         <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mt-2" />
       </div>
     );

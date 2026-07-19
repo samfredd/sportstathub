@@ -1,60 +1,32 @@
-// Namespaced away from the bare "token" key: the user session (session.ts)
-// purges localStorage "token" on every login/logout to clear legacy JWTs, which
-// would otherwise silently wipe a signed-in admin's token.
-export const ADMIN_TOKEN_KEY = "admin_token";
-export const ADMIN_COOKIE_NAME = "admin_token";
-
-export interface JwtPayload {
-  id?: number | string;
+// The administrator credential is held only in backend-issued httpOnly
+// cookies. This module stores a non-authoritative display descriptor; backend
+// /api/admin/* guards remain the source of truth for every privileged action.
+export interface AdminUser {
+  id?: number;
   email?: string;
   username?: string;
   role?: string;
-  iat?: number;
-  exp?: number;
-  [key: string]: unknown;
 }
 
-export function decodeJwt(token: string): JwtPayload | null {
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(normalized)) as JwtPayload;
-  } catch {
-    return null;
-  }
-}
+const ADMIN_USER_KEY = 'admin_user';
 
-export function isAdminPayload(payload: JwtPayload | null): payload is JwtPayload {
-  if (!payload || payload.role !== "admin") return false;
-  if (payload.exp && payload.exp * 1000 < Date.now()) return false;
-  return true;
-}
-
-export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(ADMIN_TOKEN_KEY);
-}
-
-export function storeAdminToken(token: string) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
-
-  const payload = decodeJwt(token);
-  const maxAge = payload?.exp
-    ? Math.max(0, Math.floor(payload.exp - Date.now() / 1000))
-    : 60 * 60;
-
-  document.cookie = `${ADMIN_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/admin; Max-Age=${maxAge}; SameSite=Lax`;
+export function storeAdminUser(user: AdminUser) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
 }
 
 export function clearAdminSession() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  document.cookie = `${ADMIN_COOKIE_NAME}=; Path=/admin; Max-Age=0; SameSite=Lax`;
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(ADMIN_USER_KEY);
+  // Purge credentials from versions that predated the httpOnly-cookie model.
+  localStorage.removeItem('admin_token');
+  document.cookie = 'admin_token=; Path=/admin; Max-Age=0; SameSite=Lax';
 }
 
-export function getStoredUser(): JwtPayload | null {
-  const token = getStoredToken();
-  if (!token) return null;
-  return decodeJwt(token);
+export function getStoredUser(): AdminUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ADMIN_USER_KEY);
+    return raw ? JSON.parse(raw) as AdminUser : null;
+  } catch { return null; }
 }

@@ -1341,6 +1341,7 @@ interface NewsItem {
 }
 
 function timeAgo(iso: string): string {
+  if (!iso || !Number.isFinite(new Date(iso).getTime())) return "Date unavailable";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1)  return "just now";

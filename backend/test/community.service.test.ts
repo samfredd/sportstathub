@@ -32,6 +32,7 @@ function makeRepo() {
     stats: { likes: 0, comments: 0, views: 0, shares: 0 },
     is_trending: false,
     is_premium: true,
+    cursor_epoch: '1778846400.000000',
     tags: [],
     created_at: '2026-05-15T12:00:00.000Z',
     user_id: 7,
@@ -171,4 +172,52 @@ test('getPrediction allows direct premium detail access to active pro users and 
 
   assert.equal(proPrediction.bookingCode.code, 'FULLCODE');
   assert.equal(adminPrediction.bookingCode.code, 'FULLCODE');
+});
+
+test('listPredictions preserves an explicit empty date instead of falling back to latest', async () => {
+  const calls: any[] = [];
+  const repo = {
+    async listPredictions(filters) { calls.push(filters); return []; },
+    async findFeatureFlag() { return null; },
+  };
+  const service = createCommunityService(repo);
+  const result = await service.listPredictions({ date: '2099-01-01' });
+  assert.deepEqual(result, []);
+  assert.deepEqual(calls, [{ date: '2099-01-01' }]);
+});
+
+test('cursor pagination returns a stable opaque continuation token', async () => {
+  const repo=makeRepo();
+  repo.listPredictions=async (filters:any)=>{
+    repo.calls.push({method:'listPredictions',filters});
+    return [repo.premiumRow,{...repo.premiumRow,id:98,created_at:'2026-05-14T12:00:00.000Z'}];
+  };
+  const service=createCommunityService(repo);
+  const page=await service.listPredictions({pagination:'cursor',limit:1},null);
+  assert.equal(page.items.length,1);assert.equal(typeof page.nextCursor,'string');
+  const decoded=JSON.parse(Buffer.from(page.nextCursor,'base64url').toString('utf8'));
+  assert.deepEqual(decoded,{createdEpoch:'1778846400.000000',id:99});
+});
+
+test('users cannot block themselves', async()=>{
+  const service=createCommunityService(makeRepo());
+  await assert.rejects(()=>service.setRelationship({id:7},7,{type:'block',enabled:true}),(error:any)=>error.statusCode===400);
+});
+
+test('creator cursor pagination uses prediction count, timestamp, and id',async()=>{
+  const repo:any=makeRepo();repo.listCreators=async()=>[
+    {user_id:7,username:'sharp',role:'creator',total_predictions:10,win_rate:70,cursor_epoch:'1778846400.000000'},
+    {user_id:6,username:'steady',role:'creator',total_predictions:8,win_rate:60,cursor_epoch:'1778846300.000000'},
+  ];
+  const page=await createCommunityService(repo).listCreators({pagination:'cursor',limit:1});
+  assert.equal(page.items.length,1);assert.deepEqual(JSON.parse(Buffer.from(page.nextCursor,'base64url').toString()),{totalPredictions:10,createdEpoch:'1778846400.000000',id:7});
+});
+
+test('profile avatar URLs require HTTPS on an approved host',async()=>{
+  const repo:any=makeRepo();repo.updateProfile=async(_id:number,payload:any)=>payload;
+  const service=createCommunityService(repo);
+  await assert.rejects(()=>service.updateProfile(7,{avatar_url:'javascript:alert(1)'}),(error:any)=>error.statusCode===400);
+  await assert.rejects(()=>service.updateProfile(7,{avatar_url:'https://127.0.0.1/avatar.png'}),(error:any)=>error.statusCode===400);
+  const updated=await service.updateProfile(7,{avatar_url:'https://lh3.googleusercontent.com/avatar.png'});
+  assert.equal(updated.avatar_url,'https://lh3.googleusercontent.com/avatar.png');
 });

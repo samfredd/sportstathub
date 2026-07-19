@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.browser.adapters.sportybet import SportyBetAdapter
 from app.browser.adapters.bet9ja import Bet9jaAdapter
-
+from app.browser.adapters.sportybet import SportyBetAdapter
 
 # ── SportyBet (integration — requires browser) ──────────────────────────────
 

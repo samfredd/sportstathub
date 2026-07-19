@@ -99,7 +99,7 @@ export const communityApi = {
     method: "POST",
   }),
 
-  getCreators: () => cachedApiFetch("/api/creators", 5 * 60_000),
+  getCreators: (params?: QueryParams) => cachedApiFetch(`/api/creators${query(params)}`, 5 * 60_000),
   getCreator: (id: string | number) => apiFetch(`/api/creators/${id}`),
   getLeaderboard: () => cachedApiFetch("/api/creators/leaderboard", 5 * 60_000),
   getPlatformStats: () => cachedApiFetch("/api/platform/stats", 60_000),
@@ -148,7 +148,17 @@ export const communityApi = {
   getMe: () => apiFetch("/api/me"),
   updateProfile: (body: { display_name?: string; bio?: string; avatar_url?: string }) =>
     apiFetch("/api/me/profile", { method: "PUT", body: JSON.stringify(body) }),
-  becomeCreator: () => apiFetch("/api/me/become-creator", { method: "POST" }),
+  becomeCreator: (statement?: string) => apiFetch("/api/me/become-creator", {
+    method: "POST",
+    body: JSON.stringify({ termsAccepted: true, termsVersion: "2026-01", statement }),
+  }),
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
     apiFetch("/api/me/password", { method: "PUT", body: JSON.stringify(body) }),
+  getNotifications: () => apiFetch('/api/notifications'),
+  markNotificationsRead: (ids?: number[]) => apiFetch('/api/notifications/read',{method:'POST',body:JSON.stringify(ids?{ids}:{})}),
+  getNotificationPreferences: () => apiFetch('/api/notifications/preferences'),
+  updateNotificationPreferences: (body: Record<string,unknown>) => apiFetch('/api/notifications/preferences',{method:'PUT',body:JSON.stringify(body)}),
+  getSavedMatches: () => apiFetch('/api/saved-matches'),
+  saveMatch: (fixtureId:string,body:{sport:string;startsAt:string;homeTeam:string;awayTeam:string;league?:string}) => apiFetch(`/api/saved-matches/${encodeURIComponent(fixtureId)}`,{method:'PUT',body:JSON.stringify(body)}),
+  deleteSavedMatch: (fixtureId:string,sport:string) => apiFetch(`/api/saved-matches/${encodeURIComponent(fixtureId)}?${query({sport}).slice(1)}`,{method:'DELETE'}),
 };

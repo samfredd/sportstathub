@@ -11,6 +11,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import config from "./src/config/env.config.js";
 import infrastructure from "./src/config/db.js";
 import scheduler from "./src/plugins/scheduler.js";
+import observability from "./src/plugins/observability.js";
 import authenticate from "./src/plugins/authenticate.js";
 // requireAdmin.ts is intentionally not imported: authenticate.ts already
 // decorates requireAdmin with the full user-loading version (checks DB status,
@@ -21,6 +22,7 @@ import footballRoutes from "./src/modules/football/football.routes.js";
 import codesRoutes from "./src/modules/codes/codes.routes.js";
 import refereesRoutes from "./src/modules/referees/referees.routes.js";
 import adminRoutes    from "./src/modules/admin/admin.routes.js";
+import adminInvitationRoutes from "./src/modules/admin/admin-invitations.routes.js";
 import contactRoutes  from "./src/modules/contact/contact.routes.js";
 import communityRoutes from "./src/modules/community/community.routes.js";
 import oddsRoutes from "./src/modules/odds/odds.routes.js";
@@ -29,13 +31,17 @@ import newsRoutes  from "./src/modules/news/news.routes.js";
 import billingRoutes from "./src/modules/billing/billing.routes.js";
 
 const isProd = process.env.NODE_ENV === "production";
+const trustedProxyAddresses = new Set(
+  (process.env.TRUSTED_PROXY_ADDRESSES || '127.0.0.1,::1')
+    .split(',').map((value) => value.trim()).filter(Boolean),
+);
 
 const server = fastify({
   // Behind Traefik (TLS termination) the backend only ever receives forwarded
   // requests, so trust X-Forwarded-* — without this Fastify treats every request
   // as internal http, which breaks https detection, secure cookies, and the
   // Google OAuth state/PKCE cookie round-trip on the callback.
-  trustProxy: true,
+  trustProxy: (address) => trustedProxyAddresses.has(address),
   logger: isProd
     ? { level: process.env.LOG_LEVEL ?? "warn" }
     : {
@@ -87,6 +93,7 @@ if (!isProd) {
 
 // Infrastructure (DB + Redis) — must be first
 await server.register(infrastructure);
+await server.register(observability);
 
 // Security headers — HSTS, X-Content-Type-Options, X-Frame-Options, etc.
 // CSP is disabled here: this is a JSON API (no HTML/inline scripts to protect);
@@ -160,6 +167,7 @@ await server.register(footballRoutes);
 await server.register(codesRoutes);
 await server.register(refereesRoutes);
 await server.register(adminRoutes);
+await server.register(adminInvitationRoutes);
 await server.register(contactRoutes);
 await server.register(communityRoutes);
 await server.register(oddsRoutes);
@@ -167,11 +175,35 @@ await server.register(aiRoutes);
 await server.register(newsRoutes);
 await server.register(billingRoutes);
 
-server.get("/health", async () => ({
+// Stable machine-readable contract endpoint used by CI and client generation.
+// Swagger UI remains available only outside production.
+server.get('/openapi.json', { schema: { hide: true } }, async () => server.swagger());
+
+server.get("/health/live", async () => ({
   status: "ok",
   timestamp: new Date().toISOString(),
-  redis: server.redis.status,
 }));
+
+server.get("/health/ready", async (_request, reply) => {
+  try {
+    await Promise.all([
+      (server as any).db.query('SELECT 1'),
+      server.redis.ping(),
+    ]);
+    return { status: 'ready', timestamp: new Date().toISOString() };
+  } catch (error) {
+    server.log.warn({ err: error }, 'Readiness dependency check failed');
+    return reply.status(503).send({ status: 'not_ready' });
+  }
+});
+
+// Backward-compatible aggregate health route.
+server.get("/health", async (_request, reply) => {
+  try {
+    await Promise.all([(server as any).db.query('SELECT 1'), server.redis.ping()]);
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  } catch { return reply.status(503).send({ status: 'not_ready' }); }
+});
 
 try {
   await server.listen({ port: config.port, host: config.host });

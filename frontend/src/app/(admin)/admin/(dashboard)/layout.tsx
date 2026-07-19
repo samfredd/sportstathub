@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
-import { clearAdminSession, getStoredUser } from "@/lib/adminApi";
+import { adminApi, clearAdminSession, getStoredUser } from "@/lib/adminApi";
 
 function HamburgerIcon() {
   return (
@@ -29,17 +29,13 @@ export default function AdminDashboardLayout({ children }) {
         router.replace("/admin/login");
         return;
       }
-      if (u.exp && u.exp * 1000 < Date.now()) {
-        clearAdminSession();
-        router.replace("/admin/login?session=expired");
-        return;
-      }
       setUser(u);
       setLoading(false);
     });
   }, [router]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    await adminApi.logout().catch(() => {});
     clearAdminSession();
     router.replace("/admin/login");
   }

@@ -61,6 +61,34 @@ async function billingRoutes(fastify) {
     },
   }, ctrl.listHistory);
 
+  fastify.get('/api/billing/subscription', {
+    onRequest: [fastify.authenticate],
+  }, ctrl.getSubscription);
+
+  fastify.post('/api/billing/subscription/cancel', {
+    onRequest: [fastify.authenticate],
+    schema: { body: { type: 'object', properties: { reason: { type: 'string', maxLength: 500 } }, additionalProperties: false } },
+  }, ctrl.cancelSubscription);
+
+  fastify.post('/api/billing/subscription/restore', {
+    onRequest: [fastify.authenticate],
+  }, ctrl.restoreSubscription);
+
+  fastify.get('/api/billing/receipts/:receiptNumber', {
+    onRequest: [fastify.authenticate],
+    schema: { params: { type: 'object', required: ['receiptNumber'], properties: {
+      receiptNumber: { type: 'string', pattern: '^SSH-[0-9]{4}-[0-9]{8}$' },
+    } } },
+  }, ctrl.getReceipt);
+
+  fastify.post('/api/admin/billing/entitlements/repair', {
+    onRequest: [fastify.requireRecentAdminAuth],
+    schema: { body: { type: 'object', required: ['userId','plan','expiresAt','reason'], properties: {
+      userId: { type: 'integer', minimum: 1 }, plan: { type: 'string', enum: ['pro','enterprise'] },
+      expiresAt: { type: 'string', format: 'date-time' }, reason: { type: 'string', minLength: 10, maxLength: 500 },
+    }, additionalProperties: false } },
+  }, ctrl.repairEntitlement);
+
   // ── Paystack webhook ────────────────────────────────────────────────────────
   // Paystack POSTs signed events here. We acknowledge immediately (Paystack
   // retries for up to 72 h if we return non-2xx) then process asynchronously.
@@ -73,46 +101,36 @@ async function billingRoutes(fastify) {
     // Using request.rawBody (Buffer) guarantees byte-perfect comparison;
     // JSON.stringify(parsedBody) can differ from the original bytes.
     const sig = (request.headers['x-paystack-signature'] as string) ?? '';
-    if (config.paystackSecretKey) {
-      if (!sig) {
-        return reply.status(400).send({ error: 'Missing webhook signature' });
-      }
+    if (!config.paystackSecretKey) {
+      request.log.error('Rejected Paystack webhook because PAYSTACK_SECRET_KEY is not configured');
+      return reply.status(503).send({ error: 'Payment webhook is unavailable' });
+    }
+    if (!sig) {
+      return reply.status(400).send({ error: 'Missing webhook signature' });
+    }
       const expected = crypto
         .createHmac('sha512', config.paystackSecretKey)
         .update(request.rawBody as Buffer)
         .digest('hex');
-      if (expected !== sig) {
+      const expectedBuffer = Buffer.from(expected, 'hex');
+      const signatureBuffer = /^[a-f0-9]{128}$/i.test(sig) ? Buffer.from(sig, 'hex') : Buffer.alloc(0);
+      if (expectedBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
         return reply.status(400).send({ error: 'Invalid webhook signature' });
       }
-    }
-
-    // Acknowledge receipt before doing any async work
-    reply.status(200).send({ status: 'ok' });
 
     const event = request.body as any;
-    if (event?.event !== 'charge.success') return;
-
-    const reference = event?.data?.reference as string | undefined;
-    if (!reference) return;
-
-    // Process in the background — do not block the acknowledged response
-    Promise.resolve().then(async () => {
-      try {
-        const payment = await repo.findPaymentByReference(reference);
-        // Already processed or not ours — skip
-        if (!payment || payment.status === 'success') return;
-
-        await service.verifyPayment({ id: payment.user_id }, reference);
-        fastify.log.info({ reference }, 'Paystack webhook: subscription activated');
-      } catch (err: any) {
-        // 409 = a user-initiated verify holds the processing claim — not a failure
-        if (err?.statusCode === 409) {
-          fastify.log.info({ reference }, 'Paystack webhook: verification already in progress');
-        } else {
-          fastify.log.error({ err, reference }, 'Paystack webhook: failed to activate subscription');
-        }
-      }
+    const reference = (event?.data?.reference ?? event?.data?.transaction?.reference) as string | undefined;
+    const providerId = event?.data?.id ? String(event.data.id) : '';
+    const eventKey = crypto.createHash('sha256').update(
+      `${event?.event || 'unknown'}:${providerId}:${reference || ''}:${(request.rawBody as Buffer).toString('base64')}`,
+    ).digest('hex');
+    await repo.storeWebhookEvent({
+      provider: 'paystack', eventKey, reference,
+      eventType: String(event?.event || 'unknown'), payload: event,
     });
+    // The durable insert is committed before acknowledgement. A scheduler
+    // claims and retries the event independently of this HTTP process.
+    return reply.status(200).send({ status: 'ok' });
   });
 }
 

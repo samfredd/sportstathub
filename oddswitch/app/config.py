@@ -6,6 +6,7 @@ for local development. Production values injected via Docker/env files.
 """
 
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
     app_name: str = "OddSwitch Engine"
     app_version: str = "0.1.0"
     debug: bool = False
+    cors_origins: str = ""
 
     # ── Database (PostgreSQL) ────────────────────────────────────
     database_url: str = "postgresql+asyncpg://oddswitch:oddswitch@localhost:5432/oddswitch"
@@ -58,6 +60,7 @@ class Settings(BaseSettings):
     # ── Webhook ──────────────────────────────────────────────────
     webhook_max_retries: int = 3
     webhook_timeout_seconds: int = 10
+    webhook_signing_secret: str = ""
 
     # ── Browser Pool ─────────────────────────────────────────────
     browser_pool_size: int = 3
@@ -66,6 +69,7 @@ class Settings(BaseSettings):
     # ── Observability ────────────────────────────────────────────
     log_level: str = "INFO"
     log_format: str = "json"  # "json" or "console"
+    metrics_token: str = ""
 
 
 @lru_cache

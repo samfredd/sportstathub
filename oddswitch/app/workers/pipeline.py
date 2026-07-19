@@ -23,9 +23,10 @@ import structlog
 
 from app.cache.redis_client import RedisCache
 from app.config import get_settings
+from app.core.redaction import sensitive_fingerprint
 from app.db.engine import get_session_factory
 from app.db.repository import JobRepository, MappingRepository, SlipRepository
-from app.schemas.canonical import CanonicalSlip, RawSlip
+from app.schemas.canonical import CanonicalSlip
 from app.schemas.enums import JobStatus
 from app.workers.confidence import ConfidenceScorer
 from app.workers.matcher import MatcherWorker
@@ -85,23 +86,24 @@ class TranslationPipeline:
             source = job.source_bookmaker
             target = job.target_bookmaker
             code = job.booking_code
+            tenant = job.api_key_id
 
             # ── Step 0: Mark as processing ───────────────────
             await job_repo.update_status(job_id, JobStatus.PROCESSING)
             await session.commit()
 
-            log = logger.bind(job_id=job_id, source=source, target=target, code=code)
+            log = logger.bind(job_id=job_id, source=source, target=target, code_ref=sensitive_fingerprint(code))
 
             # ── Step 1: Check cache ──────────────────────────
             log.info("step_1_cache_check")
             cached = await self._redis.get_translation(
-                f"{source}:{code}", target
+                tenant, f"{source}:{code}", target
             )
             if cached:
                 log.info("step_1_cache_hit")
                 await job_repo.complete(job_id, cached)
                 await session.commit()
-                await self._redis.set_job_status(job_id, {
+                await self._redis.set_job_status(tenant, job_id, {
                     "job_id": job_id,
                     "status": JobStatus.COMPLETED,
                     "result": cached,
@@ -111,7 +113,7 @@ class TranslationPipeline:
             # ── Step 2: Resolve booking code ─────────────────
             log.info("step_2_resolve")
             resolver = ResolverWorker(redis=self._redis)
-            raw_slip = await resolver.resolve(source, code)
+            raw_slip = await resolver.resolve(tenant, source, code)
             log.info("step_2_resolved", legs=len(raw_slip.legs))
 
             # ── Step 3: Normalize ────────────────────────────
@@ -165,7 +167,7 @@ class TranslationPipeline:
             translated_code = await rehydrator.generate_code(
                 target, translated_slip
             )
-            log.info("step_8_generated", translated_code=translated_code)
+            log.info("step_8_generated", code_ref=sensitive_fingerprint(translated_code))
 
             # Build final result
             result = self._build_result(
@@ -183,14 +185,14 @@ class TranslationPipeline:
             # ── Step 10: Cache + notify ──────────────────────
             log.info("step_10_cache_notify")
             await self._redis.set_translation(
-                f"{source}:{code}", target, result
+                tenant, f"{source}:{code}", target, result
             )
-            await self._redis.set_job_status(job_id, {
+            await self._redis.set_job_status(tenant, job_id, {
                 "job_id": job_id,
                 "status": JobStatus.COMPLETED,
                 "result": result,
             })
-            await self._redis.clear_dedup(source, code, target)
+            await self._redis.clear_dedup(tenant, source, code, target)
 
             # Webhook notification
             if job.callback_url:

@@ -8,7 +8,7 @@ export type BookingCodeStatus = (typeof bookingCodeStatuses)[number];
 
 export type AuthenticatedUser = {
   id: number;
-  role: "user" | "creator" | "admin";
+  role: "user" | "creator_pending" | "creator" | "creator_suspended" | "creator_rejected" | "moderator" | "admin";
 };
 
 export type ApiErrorBody = {

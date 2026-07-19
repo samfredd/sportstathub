@@ -169,10 +169,10 @@ export default function ProfilePage() {
                 type="url"
                 value={form.avatar_url}
                 onChange={(e) => field("avatar_url", e.target.value)}
-                placeholder="https://example.com/avatar.jpg"
+                placeholder="https://approved-image-host.example/avatar.jpg"
                 className="w-full glass px-4 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all"
               />
-              <p className="text-[10px] text-muted mt-1.5">Paste any public image URL. Shown in the forum and on your creator page.</p>
+              <p className="text-[10px] text-muted mt-1.5">Use HTTPS on an approved image host. Shown in the forum and on your creator page.</p>
             </div>
 
             {/* Display name */}

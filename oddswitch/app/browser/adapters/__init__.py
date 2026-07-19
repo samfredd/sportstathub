@@ -8,8 +8,8 @@ To add a new bookmaker, register it in ADAPTER_REGISTRY.
 from __future__ import annotations
 
 from app.browser.adapters.base import BookmakerAdapter
-from app.browser.adapters.sportybet import SportyBetAdapter
 from app.browser.adapters.bet9ja import Bet9jaAdapter
+from app.browser.adapters.sportybet import SportyBetAdapter
 from app.core.exceptions import BookmakerNotSupported
 
 # ── Adapter Registry ─────────────────────────────────────────────────────────

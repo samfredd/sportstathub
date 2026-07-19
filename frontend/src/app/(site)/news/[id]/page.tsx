@@ -32,12 +32,14 @@ const SOURCE_ACCENT: Record<string, string> = {
 };
 
 function formatDate(iso: string): string {
+  if (!iso || !Number.isFinite(new Date(iso).getTime())) return "Date unavailable";
   return new Date(iso).toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
 function timeAgo(iso: string): string {
+  if (!iso || !Number.isFinite(new Date(iso).getTime())) return "Date unavailable";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1)  return "just now";

@@ -36,6 +36,15 @@ const SPORT_OPTIONS = ["Football", "Basketball"];
 
 export default function StatsPage() {
   const [tab, setTab] = useState<TabId>("league");
+  const [initialTeamId, setInitialTeamId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const requestedTeam = Number(new URLSearchParams(window.location.search).get('team'));
+    if (Number.isInteger(requestedTeam) && requestedTeam > 0) {
+      setInitialTeamId(requestedTeam);
+      setTab('team');
+    }
+  }, []);
 
   return (
     <div className="w-full px-4 py-6 pb-28 lg:px-8 lg:pb-12">
@@ -47,10 +56,13 @@ export default function StatsPage() {
         </div>
       </div>
 
-      <div className="flex p-1.5 bg-surface/80 backdrop-blur-md border border-border/50 rounded-2xl mb-8 shadow-inner overflow-x-auto no-scrollbar gap-1">
+      <div role="tablist" aria-label="Analytics views" className="flex p-1.5 bg-surface/80 backdrop-blur-md border border-border/50 rounded-2xl mb-8 shadow-inner overflow-x-auto no-scrollbar gap-1">
         {TABS.map(t => (
           <button
             key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            aria-controls={`analytics-panel-${t.id}`}
             onClick={() => setTab(t.id)}
             className={`flex-1 min-w-[80px] py-3 rounded-xl text-[13px] font-bold transition-all duration-200 relative ${
               tab === t.id ? "text-white" : "text-muted hover:text-foreground"
@@ -62,12 +74,14 @@ export default function StatsPage() {
         ))}
       </div>
 
-      <PremiumGate feature="Advanced Statistics" mode="replace" flagKey="advanced_stats">
-        {tab === "league" && <LeagueTab />}
-        {tab === "team" && <TeamTab />}
-        {tab === "prediction" && <PredictionTab />}
-        {tab === "h2h" && <H2HTab />}
-      </PremiumGate>
+      <div role="tabpanel" id={`analytics-panel-${tab}`} aria-label={`${tab} analytics`}>
+        <PremiumGate feature="Advanced Statistics" mode="replace" flagKey="advanced_stats">
+          {tab === "league" && <LeagueTab />}
+          {tab === "team" && <TeamTab initialTeamId={initialTeamId} />}
+          {tab === "prediction" && <PredictionTab />}
+          {tab === "h2h" && <H2HTab />}
+        </PremiumGate>
+      </div>
     </div>
   );
 }
@@ -271,14 +285,15 @@ function LeagueTab() {
 
 // ── Team Tab ──────────────────────────────────────────────────────────────────
 
-function TeamTab() {
+function TeamTab({ initialTeamId }: { initialTeamId: number | null }) {
   const [leagueId, setLeagueId] = useState(39);
   const [season, setSeason] = useState(String(CURRENT_YEAR));
   // Teams list from standings — dropdown source
   const [leagueTeams, setLeagueTeams] = useState<any[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   // Selected team (from dropdown or search)
-  const [team, setTeam] = useState<any>(null);
+  const [team, setTeam] = useState<any>(initialTeamId ? { id: initialTeamId, name: `Team #${initialTeamId}` } : null);
+  const preservedInitialTeam = useRef(Boolean(initialTeamId));
   // Stats for selected team
   const [stats, setStats] = useState<any>(null);
   const [statsError, setStatsError] = useState("");
@@ -288,7 +303,8 @@ function TeamTab() {
   useEffect(() => {
     setLoadingTeams(true);
     setLeagueTeams([]);
-    setTeam(null);
+    if (preservedInitialTeam.current) preservedInitialTeam.current = false;
+    else setTeam(null);
     setStats(null);
     setStatsError("");
     fetch(`${BASE}/api/leagues/${leagueId}/standings?season=${season}`)

@@ -12,7 +12,7 @@ export function createAdminRepository(db) {
                        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS this_week
                 FROM predictions`),
       db.query(`SELECT COUNT(*) AS total,
-                       COUNT(*) FILTER (WHERE status = 'active') AS active,
+                       COUNT(*) FILTER (WHERE status IN ('active','grace')) AS active,
                        COUNT(*) FILTER (WHERE plan = 'pro') AS pro,
                        COUNT(*) FILTER (WHERE plan = 'enterprise') AS enterprise
                 FROM subscriptions`),
@@ -48,7 +48,7 @@ export function createAdminRepository(db) {
               u.oauth_provider, u.created_at, u.updated_at,
               s.plan AS subscription_plan, s.status AS subscription_status
        FROM users u
-       LEFT JOIN subscriptions s ON s.user_id = u.id AND s.status = 'active'
+       LEFT JOIN subscriptions s ON s.user_id = u.id AND s.status IN ('active','grace')
        WHERE ($1 = '' OR u.username ILIKE $2 OR u.email ILIKE $2)
        ${statusFilter}
        ORDER BY u.created_at DESC
@@ -79,7 +79,7 @@ export function createAdminRepository(db) {
     const { rows } = await db.query(
       `SELECT u.*, s.plan AS subscription_plan, s.status AS subscription_status
        FROM users u
-       LEFT JOIN subscriptions s ON s.user_id = u.id AND s.status = 'active'
+       LEFT JOIN subscriptions s ON s.user_id = u.id AND s.status IN ('active','grace')
        WHERE u.id = $1`,
       [id]
     );
@@ -95,19 +95,47 @@ export function createAdminRepository(db) {
     if (status !== undefined)      { fields.push(`status = $${i++}`);      values.push(status); }
     if (!fields.length) return null;
     values.push(id);
-    const { rows } = await db.query(
-      `UPDATE users SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, username, email, role, is_verified, status`,
-      values
-    );
-    return rows[0] ?? null;
+    return db.transact(async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(827364219)`);
+      const { rows: targetRows } = await client.query(`SELECT role,status FROM users WHERE id=$1 FOR UPDATE`, [id]);
+      const target = targetRows[0];
+      if (!target) return null;
+      const disablesAdmin = target.role === 'admin' &&
+        ((role !== undefined && role !== 'admin') || (status !== undefined && status !== 'active'));
+      if (disablesAdmin) {
+        const { rows: countRows } = await client.query(
+          `SELECT COUNT(*)::int AS count FROM users WHERE role='admin' AND status='active'`);
+        if (Number(countRows[0].count) <= 1) {
+          throw Object.assign(new Error('Cannot disable the final active administrator'), { statusCode: 409 });
+        }
+      }
+      const securityChange = role !== undefined || status !== undefined;
+      if (securityChange) fields.push(`session_version = session_version + 1`);
+      const { rows } = await client.query(
+        `UPDATE users SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, username, email, role, is_verified, status`, values);
+      if (securityChange) await client.query(
+        `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,NOW()), revoke_reason='admin_account_change'
+         WHERE user_id=$1 AND revoked_at IS NULL`, [id]);
+      return rows[0] ?? null;
+    });
   }
 
   async function deleteUser(id) {
-    const { rows } = await db.query(
-      `DELETE FROM users WHERE id = $1 RETURNING id`,
-      [id]
-    );
-    return rows[0] ?? null;
+    return db.transact(async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(827364219)`);
+      const { rows: targetRows } = await client.query(`SELECT role,status FROM users WHERE id=$1 FOR UPDATE`, [id]);
+      const target = targetRows[0];
+      if (!target) return null;
+      if (target.role === 'admin' && target.status === 'active') {
+        const { rows: countRows } = await client.query(
+          `SELECT COUNT(*)::int AS count FROM users WHERE role='admin' AND status='active'`);
+        if (Number(countRows[0].count) <= 1) {
+          throw Object.assign(new Error('Cannot delete the final active administrator'), { statusCode: 409 });
+        }
+      }
+      const { rows } = await client.query(`DELETE FROM users WHERE id=$1 RETURNING id`, [id]);
+      return rows[0] ?? null;
+    });
   }
 
   // ─── BOOKING CODES ────────────────────────────────────────
@@ -244,7 +272,7 @@ export function createAdminRepository(db) {
   async function findAllPlans() {
     const { rows } = await db.query(
       `SELECT sp.*,
-              (SELECT COUNT(*)::int FROM subscriptions s WHERE s.plan = sp.slug AND s.status = 'active') AS subscriber_count
+              (SELECT COUNT(*)::int FROM subscriptions s WHERE s.plan = sp.slug AND s.status IN ('active','grace')) AS subscriber_count
        FROM subscription_plans sp
        ORDER BY sp.sort_order ASC, sp.created_at ASC`
     );
@@ -265,15 +293,15 @@ export function createAdminRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, features, limits, isActive, isPopular, sortOrder }) {
+  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, features, limits, isActive, isPopular, sortOrder, gracePeriodDays }) {
     const { rows } = await db.query(
       `INSERT INTO subscription_plans
-         (slug, display_name, description, price_monthly, price_yearly, currency, features, limits, is_active, is_popular, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         (slug, display_name, description, price_monthly, price_yearly, currency, features, limits, is_active, is_popular, sort_order,grace_period_days)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [slug, displayName, description ?? null, priceMonthly ?? 0, priceYearly ?? 0,
        'USD', JSON.stringify(features ?? []), JSON.stringify(limits ?? {}),
-       isActive ?? true, isPopular ?? false, sortOrder ?? 0]
+       isActive ?? true, isPopular ?? false, sortOrder ?? 0,gracePeriodDays ?? 0]
     );
     return rows[0];
   }
@@ -285,7 +313,7 @@ export function createAdminRepository(db) {
     const map: Record<string, string> = {
       displayName: 'display_name', description: 'description',
       priceMonthly: 'price_monthly', priceYearly: 'price_yearly',
-      isActive: 'is_active', isPopular: 'is_popular', sortOrder: 'sort_order',
+      isActive: 'is_active', isPopular: 'is_popular', sortOrder: 'sort_order',gracePeriodDays:'grace_period_days',
     };
     for (const [key, col] of Object.entries(map)) {
       if (payload[key] !== undefined) { fields.push(`${col} = $${i++}`); values.push(payload[key]); }
@@ -383,11 +411,13 @@ export function createAdminRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createAdminPrediction({ userId, sport, league, matchData, prediction, isPremium = false, tags = [], isTrending = false, fixtureId = null }) {
+  async function createAdminPrediction({ userId, sport, schemaVersion = 1, league, matchData, prediction, bookingCode = null, isPremium = false, tags = [], isTrending = false, fixtureId = null }) {
     const { rows } = await db.query(
       `INSERT INTO predictions
-         (user_id, sport, league, match_data, prediction, is_premium, tags, is_trending, status, fixture_id)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, 'open', $9)
+         (user_id, sport, league, match_data, prediction, booking_code, is_premium, tags, is_trending,
+          status, fixture_id, schema_version, published_at, match_start_at, lock_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9,
+          'open', $10, $11, NOW(), $12, $12)
        RETURNING *`,
       [
         userId,
@@ -395,10 +425,13 @@ export function createAdminRepository(db) {
         JSON.stringify(league),
         JSON.stringify(matchData),
         JSON.stringify(prediction),
+        bookingCode ? JSON.stringify(bookingCode) : null,
         isPremium,
         tags,
         isTrending,
         fixtureId ?? matchData?.fixtureId ?? matchData?.id ?? null,
+        schemaVersion,
+        matchData?.date ?? null,
       ]
     );
     return rows[0];
@@ -520,7 +553,12 @@ export function createAdminRepository(db) {
   }
 
   async function updateAdminPassword(id, hashedPassword) {
-    await db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, id]);
+    await db.transact(async (client) => {
+      await client.query('UPDATE users SET password=$1, session_version=session_version+1 WHERE id=$2', [hashedPassword, id]);
+      await client.query(
+        `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,NOW()), revoke_reason='password_change'
+         WHERE user_id=$1 AND revoked_at IS NULL`, [id]);
+    });
   }
 
   async function findAdminById(id) {
@@ -709,10 +747,17 @@ export function createAdminRepository(db) {
     if (patch.role   !== undefined) { fields.push(`role = $${i++}`);   values.push(patch.role); }
     if (!fields.length) return [];
     values.push(ids);
+    const protectsAdmins = (patch.status !== undefined && patch.status !== 'active') ||
+      (patch.role !== undefined && patch.role !== 'admin');
     const { rows } = await db.query(
-      `UPDATE users SET ${fields.join(', ')} WHERE id = ANY($${i}::int[]) RETURNING id, username, status, role`,
+      `UPDATE users SET ${fields.join(', ')}, session_version=session_version+1
+       WHERE id = ANY($${i}::int[]) ${protectsAdmins ? "AND role != 'admin'" : ''}
+       RETURNING id, username, status, role`,
       values
     );
+    if (rows.length) await db.query(
+      `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,NOW()), revoke_reason='admin_bulk_change'
+       WHERE user_id=ANY($1::int[]) AND revoked_at IS NULL`, [rows.map((row) => row.id)]);
     return rows;
   }
 
@@ -728,7 +773,7 @@ export function createAdminRepository(db) {
   async function getSubscriptionFunnel() {
     const [total, pro, newUsers, newSubs] = await Promise.all([
       db.query(`SELECT COUNT(*) FROM users`),
-      db.query(`SELECT COUNT(*) FROM subscriptions WHERE plan = 'pro' AND status = 'active'`),
+      db.query(`SELECT COUNT(*) FROM subscriptions WHERE plan = 'pro' AND status IN ('active','grace')`),
       db.query(`SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days'`),
       db.query(`SELECT COUNT(*) FROM subscriptions WHERE created_at > NOW() - INTERVAL '30 days'`),
     ]);
@@ -743,6 +788,34 @@ export function createAdminRepository(db) {
       newUsersThisWeek,
       newSubsThisMonth,
     };
+  }
+
+  async function listCreatorApplications(status = 'pending') {
+    const { rows } = await db.query(
+      `SELECT ca.*,u.username,u.email,u.display_name,u.bio
+       FROM creator_applications ca JOIN users u ON u.id=ca.user_id
+       WHERE ($1='' OR ca.status=$1) ORDER BY ca.submitted_at`, [status]);
+    return rows;
+  }
+
+  async function reviewCreatorApplication(adminId: number, id: number, decision: string, notes?: string) {
+    return db.transact(async (client) => {
+      const { rows } = await client.query(
+        `SELECT * FROM creator_applications WHERE id=$1 FOR UPDATE`, [id]);
+      const application = rows[0];
+      if (!application || application.status !== 'pending') return null;
+      const status = decision === 'approve' ? 'approved' : 'rejected';
+      const role = decision === 'approve' ? 'creator' : 'creator_rejected';
+      await client.query(
+        `UPDATE creator_applications SET status=$2,reviewed_at=NOW(),reviewed_by=$3,review_notes=$4 WHERE id=$1`,
+        [id, status, adminId, notes ?? null]);
+      await client.query(
+        `UPDATE users SET role=$2,session_version=session_version+1 WHERE id=$1`, [application.user_id, role]);
+      await client.query(
+        `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,NOW()),revoke_reason='creator_review'
+         WHERE user_id=$1 AND revoked_at IS NULL`, [application.user_id]);
+      return { ...application, status, role, reviewed_by: adminId, review_notes: notes ?? null };
+    });
   }
 
   return {
@@ -761,5 +834,6 @@ export function createAdminRepository(db) {
     getCreatorLeaderboard,
     bulkUpdateUsers, bulkDeleteUsers,
     getSubscriptionFunnel,
+    listCreatorApplications, reviewCreatorApplication,
   };
 }

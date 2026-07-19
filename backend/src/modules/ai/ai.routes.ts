@@ -28,6 +28,21 @@ export function resolveOddsSportKey(sportId: string): string | null {
   return process.env[overrideKey] || DEFAULT_ODDS_SPORT_KEYS[sportId] || null;
 }
 
+const LIVE_MATCH_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'Q1', 'Q2', 'Q3', 'Q4', 'OT']);
+const FINISHED_MATCH_STATUSES = new Set(['FT', 'AET', 'PEN']);
+
+export function resolveAiCacheTtl(match: any, nowMs = Date.now()): number {
+  const status = String(match?.fixture?.status?.short ?? '').toUpperCase();
+  if (LIVE_MATCH_STATUSES.has(status)) return 45;
+  if (FINISHED_MATCH_STATUSES.has(status)) return 7 * 24 * 60 * 60;
+  const kickoffMs = Date.parse(match?.fixture?.date ?? '');
+  if (!Number.isFinite(kickoffMs)) return 5 * 60;
+  const untilKickoff = kickoffMs - nowMs;
+  if (untilKickoff <= 2 * 60 * 60 * 1000) return 2 * 60;
+  if (untilKickoff <= 24 * 60 * 60 * 1000) return 10 * 60;
+  return 60 * 60;
+}
+
 function cleanTeamName(value: string): string {
   return value
     .split(/[,\u2014?]/)[0]
@@ -74,7 +89,7 @@ function findRelevantOddsEvents(events: any[] = [], matchup: { homeName: string;
   const away = normalize(matchup.awayName);
   return events.filter((event: any) => {
     const text = normalize(`${event.home_team ?? ''} ${event.away_team ?? ''}`);
-    return text.includes(home) || text.includes(away);
+    return text.includes(home) && text.includes(away);
   }).slice(0, 3);
 }
 
@@ -136,7 +151,8 @@ ${summarizeOdds(relevant)}`,
   }
 }
 
-async function buildFreeTextDataContext(footballService: any, oddsService: any, userPrompt: string, sportId: string) {
+async function buildFreeTextDataContext(footballService: any, oddsService: any, userPrompt: string, sportId: string,
+  selection: { fixtureId?: number; homeTeamId?: number; awayTeamId?: number; leagueId?: number; matchDate?: string } = {}) {
   const matchup = extractMatchup(userPrompt);
   const generatedAt = new Date().toISOString();
   const oddsContext = await buildOddsContext(oddsService, matchup, sportId, generatedAt);
@@ -149,12 +165,35 @@ async function buildFreeTextDataContext(footballService: any, oddsService: any, 
   }
 
   try {
+    if (selection.fixtureId) {
+      const selectedFixture = await footballService.getMatchById(selection.fixtureId,sportId);
+      if (!selectedFixture) return { generatedAt,ambiguity:{reason:'fixture_not_found',fixtureId:selection.fixtureId},contextText:'',sources:[] };
+      selection.homeTeamId=Number(selectedFixture.teams?.home?.id);
+      selection.awayTeamId=Number(selectedFixture.teams?.away?.id);
+    }
     const [homeResults, awayResults] = await Promise.all([
       footballService.searchTeams(matchup.homeName, sportId),
       footballService.searchTeams(matchup.awayName, sportId),
     ]);
-    const home = normalizeTeamSearchResult(homeResults?.[0]);
-    const away = normalizeTeamSearchResult(awayResults?.[0]);
+    const normalizeName=(value: string)=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const candidateSet=(results: any[],name: string)=>results.map(normalizeTeamSearchResult)
+      .filter((candidate: any)=>candidate.id && candidate.name)
+      .sort((a: any,b: any)=>Number(normalizeName(b.name)===normalizeName(name))-Number(normalizeName(a.name)===normalizeName(name)))
+      .slice(0,8);
+    const homeCandidates=candidateSet(homeResults??[],matchup.homeName);
+    const awayCandidates=candidateSet(awayResults??[],matchup.awayName);
+    const pick=(candidates: any[],id?: number)=>id ? candidates.find((candidate: any)=>candidate.id===Number(id)) : candidates[0];
+    const exactHome=homeCandidates.filter((c: any)=>normalizeName(c.name)===normalizeName(matchup.homeName));
+    const exactAway=awayCandidates.filter((c: any)=>normalizeName(c.name)===normalizeName(matchup.awayName));
+    const ambiguousHome=!selection.homeTeamId && (exactHome.length>1 || (!exactHome.length && homeCandidates.length>1));
+    const ambiguousAway=!selection.awayTeamId && (exactAway.length>1 || (!exactAway.length && awayCandidates.length>1));
+    if(ambiguousHome || ambiguousAway){
+      return {generatedAt,ambiguity:{reason:'team_ambiguous',parsedMatchup:matchup,
+        homeCandidates:ambiguousHome?homeCandidates:[],awayCandidates:ambiguousAway?awayCandidates:[],
+        requestedLeagueId:selection.leagueId??null,requestedMatchDate:selection.matchDate??null},contextText:'',sources:[]};
+    }
+    const home = pick(homeCandidates,selection.homeTeamId) ?? {};
+    const away = pick(awayCandidates,selection.awayTeamId) ?? {};
     if (!home.id || !away.id) {
       return {
         generatedAt,
@@ -540,14 +579,46 @@ async function aiRoutes(fastify: any) {
     redis: fastify.redis,
   });
   const requireLiveAiAccess = fastify.requireFeatureAccess('live_ai', 'enterprise');
+  let activeAiRequests = 0;
+  let controlsCache: any=null;let controlsCachedAt=0;
+  async function getControls(){
+    if(controlsCache&&Date.now()-controlsCachedAt<30_000)return controlsCache;
+    const {rows}=await fastify.db.query(`SELECT key,value FROM runtime_settings WHERE key LIKE 'ai.%'`);
+    controlsCache=Object.fromEntries(rows.map((row:any)=>[row.key,Number(row.value)]));controlsCachedAt=Date.now();return controlsCache;
+  }
+  async function recordUsage(request:any,endpoint:string,inputChars:number,outputChars:number,success:boolean,startedAt:number,metadata:any={}){
+    await fastify.db.query(`INSERT INTO ai_usage_events(user_id,request_id,endpoint,model,input_characters,output_characters,success,duration_ms,metadata)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,[request.user?.id,request.id,endpoint,config.nvidiaModel,inputChars,outputChars,success,Date.now()-startedAt,JSON.stringify(metadata)]).catch(()=>{});
+  }
+  const aiGuard = async (request: any, reply: any) => {
+    await requireLiveAiAccess(request, reply);
+    if (reply.sent) return;
+    const controls=await getControls();request.aiControls=controls;request.aiStartedAt=Date.now();
+    const day = new Date().toISOString().slice(0, 10);
+    const userKey = `ai:quota:user:${request.user.id}:${day}`;
+    const ipKey = `ai:quota:ip:${request.ip}:${day}`;
+    const [userCount, ipCount] = await Promise.all([
+      fastify.redis.incr(userKey), fastify.redis.incr(ipKey),
+    ]);
+    if (userCount === 1) await fastify.redis.expire(userKey, 90_000);
+    if (ipCount === 1) await fastify.redis.expire(ipKey, 90_000);
+    if (userCount > (controls['ai.daily_user_limit']??30) || ipCount > (controls['ai.daily_ip_limit']??60)) {
+      return reply.status(429).send({ status: 'error', error: 'Daily AI usage limit reached' });
+    }
+    if (activeAiRequests >= (controls['ai.concurrency_limit']??10)) {
+      return reply.status(503).send({ status: 'error', error: 'AI service is busy; try again shortly' });
+    }
+  };
 
   fastify.get('/api/matches/:id/ai-prediction', {
-    onRequest: [requireLiveAiAccess],
+    onRequest: [aiGuard],
   }, async (request: any, reply: any) => {
     const { id }    = request.params;
     const { sport = 'football' } = request.query as { sport?: string };
     const isBasketball = sport === 'basketball';
-    const cacheKey = `ai:prediction:v5:${id}:${sport}`;
+    // Model identity is part of the key so changing the configured model never
+    // serves analysis produced by an older model.
+    const cacheKey = `ai:prediction:v6:${config.nvidiaModel}:${id}:${sport}`;
 
     // Cache hit → instant JSON
     try {
@@ -583,6 +654,7 @@ async function aiRoutes(fastify: any) {
       : buildSystemPrompt(mode) + '\n\n' + buildUserPrompt(match, h2h, homeForm, awayForm, mode);
 
     // Stream SSE response
+    activeAiRequests += 1;
     reply.hijack();
     const raw = reply.raw;
     raw.setHeader('Content-Type', 'text/event-stream');
@@ -602,7 +674,7 @@ async function aiRoutes(fastify: any) {
         stream:      true,
         temperature: 1.0,
         top_p:       0.95,
-        max_tokens:  350,
+        max_tokens:  request.aiControls?.['ai.match_max_output_tokens']??350,
         ...NVIDIA_NO_THINKING,
       }, 120_000);
 
@@ -618,23 +690,37 @@ async function aiRoutes(fastify: any) {
       }
 
       send({ done: true, mode, analysis, model: config.nvidiaModel });
+      await recordUsage(request,'match_prediction',prompt.length,analysis.length,true,request.aiStartedAt,{fixtureId:Number(id),sport});
 
       try {
-        await fastify.redis.setex(cacheKey, 3600, JSON.stringify({
+        const generatedAt = new Date().toISOString();
+        const ttlSeconds = resolveAiCacheTtl(match);
+        await fastify.redis.setex(cacheKey, ttlSeconds, JSON.stringify({
           analysis, mode, model: config.nvidiaModel,
-          generated_at: new Date().toISOString(),
+          generated_at: generatedAt,
+          source_timestamp: match?.fixture?.date ?? null,
+          cache_fresh_until: new Date(Date.parse(generatedAt) + ttlSeconds * 1000).toISOString(),
+          data_completeness: {
+            match: Boolean(match),
+            h2h: h2h.length > 0,
+            home_form: homeForm.length > 0,
+            away_form: awayForm.length > 0,
+          },
         }));
       } catch { /* non-fatal */ }
 
     } catch (e: any) {
+      await recordUsage(request,'match_prediction',prompt.length,analysis.length,false,request.aiStartedAt,{fixtureId:Number(id),sport,error:String(e?.message??'unknown').slice(0,200)});
       send({ error: e.message ?? 'Could not reach NVIDIA AI.' });
+    } finally {
+      activeAiRequests = Math.max(0, activeAiRequests - 1);
+      raw.end();
     }
-
-    raw.end();
   });
 
   // ── Free-text prediction ───────────────────────────────────────────────────
   fastify.post('/api/ai/predict', {
+    onRequest: [aiGuard],
     schema: {
       body: {
         type: 'object',
@@ -642,12 +728,14 @@ async function aiRoutes(fastify: any) {
         properties: {
           prompt:   { type: 'string', minLength: 5, maxLength: 1000 },
           sport:    { type: 'string', maxLength: 50 },
+          fixtureId:{type:'integer',minimum:1},homeTeamId:{type:'integer',minimum:1},awayTeamId:{type:'integer',minimum:1},
+          leagueId:{type:'integer',minimum:1},matchDate:{type:'string',format:'date'},
         },
         additionalProperties: false,
       },
     },
   }, async (request: any, reply: any) => {
-    const { prompt: userPrompt, sport = 'Football' } = request.body as { prompt: string; sport?: string };
+    const { prompt: userPrompt, sport = 'Football',...selection } = request.body as any;
     const sportId = normalizeAiSport(sport);
     if (!sportId) {
       return reply.status(400).send({
@@ -655,7 +743,10 @@ async function aiRoutes(fastify: any) {
         error: 'AI Predict currently supports Football, Basketball, Baseball, Hockey, and Volleyball.',
       });
     }
-    const dataContext = await buildFreeTextDataContext(footballService, oddsService, userPrompt, sportId);
+    const dataContext = await buildFreeTextDataContext(footballService, oddsService, userPrompt, sportId,selection);
+    if(dataContext.ambiguity){
+      return reply.status(409).send({status:'clarification_required',error:'Select the intended teams or fixture before generating a prediction.',data:dataContext.ambiguity});
+    }
 
     const systemPrompt = `You are an expert sports analyst. The user will describe a match or ask about a prediction.
 Give a concise, structured prediction with exactly these sections:
@@ -689,6 +780,7 @@ RULES:
 
     const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}\nSport: ${sportId}\n\n${dataContext.contextText}`;
 
+    activeAiRequests += 1;
     reply.hijack();
     const raw = reply.raw;
     raw.setHeader('Content-Type', 'text/event-stream');
@@ -707,7 +799,7 @@ RULES:
         stream:      true,
         temperature: 1.0,
         top_p:       0.95,
-        max_tokens:  300,
+        max_tokens:  request.aiControls?.['ai.predict_max_output_tokens']??300,
         ...NVIDIA_NO_THINKING,
       }, 60_000);
 
@@ -724,15 +816,34 @@ RULES:
       }
 
       send({ done: true, analysis, sources: dataContext.sources, generatedAt: dataContext.generatedAt });
+      await recordUsage(request,'free_text_prediction',fullPrompt.length,analysis.length,true,request.aiStartedAt,{sport:sportId});
     } catch (e: any) {
+      await recordUsage(request,'free_text_prediction',fullPrompt.length,0,false,request.aiStartedAt,{sport:sportId,error:String(e?.message??'unknown').slice(0,200)});
       send({ error: e.message ?? 'AI service is currently unavailable.' });
+    } finally {
+      activeAiRequests = Math.max(0, activeAiRequests - 1);
+      raw.end();
     }
+  });
 
-    raw.end();
+  fastify.get('/api/admin/ai/settings',{onRequest:[fastify.requireAdmin]},async(_request:any,reply:any)=>{
+    const {rows}=await fastify.db.query(`SELECT key,value,description,updated_at FROM runtime_settings WHERE key LIKE 'ai.%' ORDER BY key`);
+    return reply.send({status:'success',data:rows});
+  });
+  fastify.put('/api/admin/ai/settings',{onRequest:[fastify.requireRecentAdminAuth],schema:{body:{type:'object',required:['settings'],properties:{settings:{type:'object',minProperties:1,maxProperties:5,properties:{
+    'ai.daily_user_limit':{type:'integer',minimum:1,maximum:10000},'ai.daily_ip_limit':{type:'integer',minimum:1,maximum:20000},
+    'ai.concurrency_limit':{type:'integer',minimum:1,maximum:100},'ai.predict_max_output_tokens':{type:'integer',minimum:100,maximum:2000},
+    'ai.match_max_output_tokens':{type:'integer',minimum:100,maximum:2000},
+  },additionalProperties:false}},additionalProperties:false}}},async(request:any,reply:any)=>{
+    await fastify.db.transact(async(client:any)=>{for(const[key,value]of Object.entries(request.body.settings))await client.query(`UPDATE runtime_settings SET value=$2::jsonb,updated_by=$3,updated_at=NOW() WHERE key=$1`,[key,JSON.stringify(value),request.user.id]);
+      await client.query(`INSERT INTO admin_logs(admin_id,action,target_type,metadata) VALUES($1,'ai.settings_updated','runtime_settings',$2::jsonb)`,[request.user.id,JSON.stringify({keys:Object.keys(request.body.settings)})]);});
+    controlsCache=null;return reply.send({status:'success',data:await getControls()});
   });
 
   // ── Connectivity test ──────────────────────────────────────────────────────
-  fastify.get('/api/ai/test', async (_request: any, reply: any) => {
+  if (process.env.NODE_ENV !== 'production') fastify.get('/api/ai/test', {
+    onRequest: [fastify.requireAdmin],
+  }, async (_request: any, reply: any) => {
     try {
       const res = await callNvidia({
         model:       config.nvidiaModel,

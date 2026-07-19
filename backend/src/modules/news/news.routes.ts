@@ -9,10 +9,23 @@ async function newsRoutes(fastify: any) {
 
   // News is public and refreshed on a 15-min feed cache — match that TTL.
   fastify.get('/api/news', { ...cache(900) }, async (request: any, reply: any) => {
-    const { limit = '30', page = '1' } = request.query as Record<string, string>;
+    const { limit = '30', page = '1', pagination = 'legacy', cursor } = request.query as Record<string, string>;
     const pageNum  = Math.max(1, Number(page));
     const limitNum = Math.min(100, Math.max(1, Number(limit)));
     const all      = await newsService.getAllNews();
+    if(pagination==='cursor'){
+      let filtered=all;
+      if(cursor){
+        try{
+          const decoded=JSON.parse(Buffer.from(cursor,'base64url').toString('utf8'));
+          if(typeof decoded.publishedAt!=='string'||typeof decoded.id!=='string')throw new Error();
+          filtered=all.filter(item=>item.publishedAt<decoded.publishedAt||(item.publishedAt===decoded.publishedAt&&item.id<decoded.id));
+        }catch{return reply.status(400).send({status:'error',error:'Invalid pagination cursor'});}
+      }
+      const items=filtered.slice(0,limitNum);const last=items.at(-1);
+      const nextCursor=filtered.length>limitNum&&last?Buffer.from(JSON.stringify({publishedAt:last.publishedAt,id:last.id})).toString('base64url'):null;
+      return reply.send({status:'success',data:{items,nextCursor}});
+    }
     const start    = (pageNum - 1) * limitNum;
     return reply.send({
       status: 'success',

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "codegen": "openapi-typescript http://localhost:4000/docs/json -o src/lib/api-types.ts"
+    "test:e2e": "playwright test",
+    "test:a11y": "playwright test --grep accessibility",
+    "codegen": "openapi-typescript http://localhost:4000/openapi.json -o src/lib/api-types.ts"
   },
   "postcss": {
     "plugins": {
@@ -20,7 +22,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
-    "next": "^16.2.4",
+    "next": "^16.2.10",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "shadcn": "^4.6.0",
@@ -29,14 +31,19 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.4",
+    "eslint-config-next": "^16.2.10",
     "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "postcss": "8.5.20"
   }
 }

@@ -10,8 +10,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.v1.router import router as v1_router
 from app.api.v1.schemas import HealthResponse
@@ -32,6 +33,8 @@ async def lifespan(app: FastAPI):
     Shutdown: Close DB pool + Redis connection
     """
     settings = get_settings()
+    if not settings.debug and not settings.webhook_signing_secret:
+        raise RuntimeError("WEBHOOK_SIGNING_SECRET is required outside debug mode")
 
     # ── Startup ──────────────────────────────────────────────
     logger.info("starting", app=settings.app_name, version=settings.app_version)
@@ -70,9 +73,11 @@ def create_app() -> FastAPI:
     # ── Middleware ────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Restrict in production
+        allow_origins=["*"] if settings.debug else [
+            origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()
+        ],
         allow_methods=["GET", "POST"],
-        allow_headers=["*"],
+        allow_headers=[settings.api_key_header, "Content-Type"],
     )
 
     # ── Exception Handlers ───────────────────────────────────
@@ -98,6 +103,13 @@ def create_app() -> FastAPI:
                 "redis": redis_ok,
             },
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics(request: Request) -> Response:
+        supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if not settings.debug and (not settings.metrics_token or supplied != settings.metrics_token):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return app
 

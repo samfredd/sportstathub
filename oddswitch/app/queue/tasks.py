@@ -19,6 +19,7 @@ import traceback
 
 import structlog
 
+from app.core.redaction import sensitive_fingerprint
 from app.queue.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -63,6 +64,10 @@ def execute_translation_pipeline(self, job_id: str) -> dict:
             error=str(exc),
             traceback=traceback.format_exc(),
         )
+        if self.request.retries < self.max_retries:
+            # Keep the job non-terminal until Celery has exhausted its retry
+            # budget; callers may continue polling the same tenant-owned job.
+            raise self.retry(exc=exc)
         _run_async(_mark_job_failed(job_id, exc))
         raise
 
@@ -81,16 +86,31 @@ async def _execute_pipeline(job_id: str) -> dict:
 
 async def _mark_job_failed(job_id: str, exc: Exception) -> None:
     """Mark a job as failed in the database."""
+    from app.cache.redis_client import RedisCache
     from app.db.engine import get_session_factory
-    from app.schemas.enums import JobStatus
     from app.db.repository import JobRepository
+    from app.schemas.enums import JobStatus
 
     session_factory = get_session_factory()
     async with session_factory() as session:
         repo = JobRepository(session)
+        job = await repo.get_by_id(job_id)
         error_code = getattr(exc, "error_code", "PIPELINE_ERROR")
         await repo.fail(job_id, error_code, str(exc))
         await session.commit()
+        if job:
+            redis = await RedisCache.create()
+            try:
+                await redis.clear_dedup(
+                    job.api_key_id, job.source_bookmaker, job.booking_code, job.target_bookmaker
+                )
+                await redis.set_job_status(job.api_key_id, job_id, {
+                    "job_id": job_id,
+                    "status": JobStatus.FAILED,
+                    "error": {"code": error_code, "message": "Translation failed"},
+                })
+            finally:
+                await redis.close()
 
 
 @celery_app.task(
@@ -107,14 +127,15 @@ def resolve_booking_code(self, bookmaker: str, code: str) -> dict:
     Runs in the isolated browser worker pool.
     Returns the raw slip as a JSON-serializable dict.
     """
-    logger.info("resolve_start", bookmaker=bookmaker, code=code)
+    code_ref = sensitive_fingerprint(code)
+    logger.info("resolve_start", bookmaker=bookmaker, code_ref=code_ref)
 
     try:
         result = _run_async(_resolve(bookmaker, code))
-        logger.info("resolve_complete", bookmaker=bookmaker, code=code)
+        logger.info("resolve_complete", bookmaker=bookmaker, code_ref=code_ref)
         return result
     except Exception as exc:
-        logger.error("resolve_failed", bookmaker=bookmaker, code=code, error=str(exc))
+        logger.error("resolve_failed", bookmaker=bookmaker, code_ref=code_ref, error=str(exc))
         raise self.retry(exc=exc)
 
 
@@ -148,7 +169,7 @@ def generate_booking_code(self, bookmaker: str, slip_data: dict) -> str:
 
     try:
         result = _run_async(_generate(bookmaker, slip_data))
-        logger.info("generate_complete", bookmaker=bookmaker, code=result)
+        logger.info("generate_complete", bookmaker=bookmaker, code_ref=sensitive_fingerprint(result))
         return result
     except Exception as exc:
         logger.error("generate_failed", bookmaker=bookmaker, error=str(exc))

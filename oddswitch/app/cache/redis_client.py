@@ -52,16 +52,16 @@ class RedisCache:
 
     # ── Booking Code Cache ───────────────────────────────────────
 
-    def _bc_key(self, bookmaker: str, code: str) -> str:
-        return f"bc:{bookmaker}:{code}"
+    def _bc_key(self, tenant: str, bookmaker: str, code: str) -> str:
+        return f"tenant:{tenant}:bc:{bookmaker}:{code}"
 
-    async def get_booking_code(self, bookmaker: str, code: str) -> dict | None:
+    async def get_booking_code(self, tenant: str, bookmaker: str, code: str) -> dict | None:
         """Retrieve cached booking code resolution."""
-        data = await self._client.get(self._bc_key(bookmaker, code))
+        data = await self._client.get(self._bc_key(tenant, bookmaker, code))
         return json.loads(data) if data else None
 
     async def set_booking_code(
-        self, bookmaker: str, code: str, data: dict, *, prematch: bool = False
+        self, tenant: str, bookmaker: str, code: str, data: dict, *, prematch: bool = False
     ) -> None:
         """Cache a resolved booking code."""
         ttl = (
@@ -70,7 +70,7 @@ class RedisCache:
             else self._settings.cache_ttl_booking_code
         )
         await self._client.set(
-            self._bc_key(bookmaker, code),
+            self._bc_key(tenant, bookmaker, code),
             json.dumps(data),
             ex=ttl,
         )
@@ -95,16 +95,16 @@ class RedisCache:
 
     # ── Translation Result Cache ─────────────────────────────────
 
-    def _tx_key(self, slip_hash: str, target: str) -> str:
-        return f"tx:{slip_hash}:{target}"
+    def _tx_key(self, tenant: str, slip_hash: str, target: str) -> str:
+        return f"tenant:{tenant}:tx:{slip_hash}:{target}"
 
-    async def get_translation(self, slip_hash: str, target: str) -> dict | None:
+    async def get_translation(self, tenant: str, slip_hash: str, target: str) -> dict | None:
         """Retrieve cached translation result."""
-        data = await self._client.get(self._tx_key(slip_hash, target))
+        data = await self._client.get(self._tx_key(tenant, slip_hash, target))
         return json.loads(data) if data else None
 
     async def set_translation(
-        self, slip_hash: str, target: str, data: dict, *, prematch: bool = False
+        self, tenant: str, slip_hash: str, target: str, data: dict, *, prematch: bool = False
     ) -> None:
         """Cache a translation result."""
         ttl = (
@@ -113,46 +113,46 @@ class RedisCache:
             else self._settings.cache_ttl_translation
         )
         await self._client.set(
-            self._tx_key(slip_hash, target),
+            self._tx_key(tenant, slip_hash, target),
             json.dumps(data),
             ex=ttl,
         )
 
     # ── Deduplication ────────────────────────────────────────────
 
-    def _dedup_key(self, source: str, code: str, target: str) -> str:
-        return f"dedup:{source}:{code}:{target}"
+    def _dedup_key(self, tenant: str, source: str, code: str, target: str) -> str:
+        return f"tenant:{tenant}:dedup:{source}:{code}:{target}"
 
-    async def check_dedup(self, source: str, code: str, target: str) -> str | None:
+    async def check_dedup(self, tenant: str, source: str, code: str, target: str) -> str | None:
         """Check if a translation is already in-flight. Returns job_id or None."""
-        return await self._client.get(self._dedup_key(source, code, target))
+        return await self._client.get(self._dedup_key(tenant, source, code, target))
 
-    async def set_dedup(self, source: str, code: str, target: str, job_id: str) -> None:
+    async def set_dedup(self, tenant: str, source: str, code: str, target: str, job_id: str) -> None:
         """Register a deduplication lock for an in-flight job."""
         await self._client.set(
-            self._dedup_key(source, code, target),
+            self._dedup_key(tenant, source, code, target),
             job_id,
             ex=self._settings.cache_ttl_dedup,
         )
 
-    async def clear_dedup(self, source: str, code: str, target: str) -> None:
+    async def clear_dedup(self, tenant: str, source: str, code: str, target: str) -> None:
         """Clear deduplication lock after job completes."""
-        await self._client.delete(self._dedup_key(source, code, target))
+        await self._client.delete(self._dedup_key(tenant, source, code, target))
 
     # ── Job Status Cache ─────────────────────────────────────────
 
-    def _job_key(self, job_id: str) -> str:
-        return f"job:{job_id}"
+    def _job_key(self, tenant: str, job_id: str) -> str:
+        return f"tenant:{tenant}:job:{job_id}"
 
-    async def get_job_status(self, job_id: str) -> dict | None:
+    async def get_job_status(self, tenant: str, job_id: str) -> dict | None:
         """Retrieve cached job status."""
-        data = await self._client.get(self._job_key(job_id))
+        data = await self._client.get(self._job_key(tenant, job_id))
         return json.loads(data) if data else None
 
-    async def set_job_status(self, job_id: str, data: dict) -> None:
+    async def set_job_status(self, tenant: str, job_id: str, data: dict) -> None:
         """Cache job status for fast polling."""
         await self._client.set(
-            self._job_key(job_id),
+            self._job_key(tenant, job_id),
             json.dumps(data),
             ex=self._settings.cache_ttl_job_status,
         )

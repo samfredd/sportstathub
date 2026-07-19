@@ -166,24 +166,9 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       throw Object.assign(new Error('Payment verification mismatch'), { statusCode: 400 });
     }
 
-    const subscription = await repo.activateSubscription({
-      userId: payment.user_id,
-      plan: payment.plan,
-      expiresAt: addInterval(new Date(), payment.billing_interval).toISOString(),
-      reference,
-    });
-
-    const paidPayment = await repo.markPaymentStatus(reference, {
-      status: 'success',
-      providerPayload: verification.raw,
-      paidAt: verification.paidAt ?? new Date().toISOString(),
-      subscriptionId: subscription.id,
-    });
-
-    return {
-      payment: paidPayment,
-      subscription,
-    };
+    const settled = await repo.settleVerifiedPayment(reference, verification);
+    if (!settled) throw Object.assign(new Error('Payment not found'), { statusCode: 404 });
+    return settled;
   }
 
   async function listPayments(user: any, { limit = 20, offset = 0 } = {}) {
@@ -194,10 +179,96 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
     return payments.map((p: any) => ({ ...p, amount: toNumber(p.amount) }));
   }
 
+  async function getSubscription(user: any) {
+    if (!user?.id) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    const [subscription, events] = await Promise.all([
+      repo.findCurrentSubscription(user.id), repo.findSubscriptionEvents(user.id),
+    ]);
+    return { subscription, renewalPolicy: subscription?.renewal_policy ?? 'manual', events };
+  }
+
+  async function cancelSubscription(user: any, reason?: string) {
+    if (!user?.id) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    const subscription = await repo.cancelAtPeriodEnd(user.id, reason);
+    if (!subscription) throw Object.assign(new Error('No active subscription found'), { statusCode: 404 });
+    return subscription;
+  }
+
+  async function restoreSubscription(user: any) {
+    if (!user?.id) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    const subscription = await repo.restoreSubscription(user.id);
+    if (!subscription) throw Object.assign(new Error('No restorable subscription found'), { statusCode: 404 });
+    return subscription;
+  }
+
+  async function getReceipt(user: any, receiptNumber: string) {
+    if (!user?.id) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    const receipt = await repo.findReceiptForUser(receiptNumber, user.id);
+    if (!receipt) throw Object.assign(new Error('Receipt not found'), { statusCode: 404 });
+    return receipt;
+  }
+
+  async function repairEntitlement(admin: any, input: any) {
+    const plan = await repo.findActivePlanBySlug(input.plan);
+    if (!plan || input.plan === 'free') throw Object.assign(new Error('Active paid plan not found'), { statusCode: 404 });
+    if (new Date(input.expiresAt).getTime() <= Date.now()) {
+      throw Object.assign(new Error('Entitlement expiry must be in the future'), { statusCode: 400 });
+    }
+    return repo.repairEntitlement(admin.id, input);
+  }
+
+  async function processWebhookEvents() {
+    const events = await repo.claimWebhookEvents();
+    for (const event of events) {
+      try {
+        if (event.event_type === 'charge.success' && event.reference) {
+          const payment = await repo.findPaymentByReference(event.reference);
+          if (payment) await verifyPayment({ id: payment.user_id }, event.reference);
+        }
+        if (event.reference && (event.event_type.startsWith('refund.') || event.event_type.startsWith('charge.dispute.'))) {
+          await repo.applyAdversePaymentEvent(event.reference, event.event_type, event.raw_payload);
+        }
+        await repo.finishWebhookEvent(event.id);
+      } catch (error: any) {
+        await repo.finishWebhookEvent(event.id, error?.message || 'Webhook processing failed');
+      }
+    }
+    return { claimed: events.length };
+  }
+
+  async function reconcilePayments() {
+    const payments = await repo.findStalePayments();
+    for (const payment of payments) {
+      try {
+        const verification = await paystack.verifyTransaction(payment.reference);
+        if (verification.status === 'success') {
+          await verifyPayment({ id: payment.user_id }, payment.reference);
+          await repo.recordReconciliation(payment, verification.status, 'repaired');
+        } else {
+          const terminal = new Set(['failed', 'abandoned', 'reversed']).has(String(verification.status));
+          if (terminal) await repo.markPaymentStatus(payment.reference, {
+            status: verification.status, providerPayload: verification.raw,
+          });
+          await repo.recordReconciliation(payment, verification.status, terminal ? 'terminal' : 'unchanged');
+        }
+      } catch (error: any) {
+        await repo.recordReconciliation(payment, 'unknown', 'error', error?.message);
+      }
+    }
+    return { checked: payments.length };
+  }
+
   return {
     listPlans,
     initializeCheckout,
     verifyPayment,
     listPayments,
+    getSubscription,
+    cancelSubscription,
+    restoreSubscription,
+    getReceipt,
+    repairEntitlement,
+    processWebhookEvents,
+    reconcilePayments,
   };
 }

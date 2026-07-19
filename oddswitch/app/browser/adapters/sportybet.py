@@ -27,14 +27,13 @@ DOM Structure (verified 2026-04-28):
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from typing import Any
 
 import structlog
 
 from app.browser.adapters.base import BookmakerAdapter
-from app.browser.stealth import random_delay
+from app.core.redaction import sensitive_fingerprint
 from app.schemas.canonical import RawLeg, RawSlip
 
 logger = structlog.get_logger()
@@ -132,9 +131,8 @@ class SportyBetAdapter(BookmakerAdapter):
           3. Build RawSlip and RawLeg objects
         """
         import httpx
-        from datetime import datetime, timezone
 
-        logger.info("sportybet_resolve_start", code=code)
+        logger.info("sportybet_resolve_start", code_ref=sensitive_fingerprint(code))
 
         async with httpx.AsyncClient(headers=API_HEADERS, timeout=15.0) as client:
             resp = await client.get(f"{SPORTYBET_BASE}/api/ng/orders/share/{code}", params={"_t": "1"})
@@ -257,6 +255,7 @@ class SportyBetAdapter(BookmakerAdapter):
     async def _build_leg_selection(self, leg: dict, all_events: list[dict]) -> dict | None:
         """Find the matching event and market/outcome IDs for a leg."""
         from difflib import SequenceMatcher
+
         import httpx
 
         target_event_name = leg.get("event_name") or leg.get("event", "")
@@ -409,7 +408,7 @@ class SportyBetAdapter(BookmakerAdapter):
                 if result.get("bizCode") == 10000:
                     code = result.get("data", {}).get("shareCode")
                     if code:
-                        logger.info("sportybet_code_generated", code=code)
+                        logger.info("sportybet_code_generated", code_ref=sensitive_fingerprint(code))
                         return code
 
             raise RuntimeError(f"SportyBet API code generation failed: {resp.text}")

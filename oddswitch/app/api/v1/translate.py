@@ -18,11 +18,13 @@ from app.api.v1.schemas import (
     ErrorDetail,
     JobCreatedResponse,
     JobStatusResponse,
+    TranslateRequest,
     TranslationResult,
 )
-from app.api.v1.schemas import TranslateRequest
 from app.cache.redis_client import RedisCache
+from app.core.callback_security import validate_callback_url
 from app.core.exceptions import JobNotFound
+from app.core.redaction import sensitive_fingerprint
 from app.db.repository import JobRepository
 from app.dependencies import get_authenticated_key, get_db, get_redis
 from app.queue.tasks import execute_translation_pipeline
@@ -57,9 +59,12 @@ async def create_translation(
     source = request.source_bookmaker
     target = request.target_bookmaker
     code = request.booking_code
+    tenant = api_key["id"]
+    if request.callback_url:
+        await validate_callback_url(request.callback_url)
 
     # ── Step 1: Deduplication ────────────────────────────────
-    existing_job_id = await redis.check_dedup(source, code, target)
+    existing_job_id = await redis.check_dedup(tenant, source, code, target)
     if existing_job_id:
         logger.info(
             "dedup_hit",
@@ -70,7 +75,7 @@ async def create_translation(
         )
         # Return the existing job — client can poll for status
         job_repo = JobRepository(db)
-        existing = await job_repo.get_by_id(existing_job_id)
+        existing = await job_repo.get_by_id(existing_job_id, tenant)
         if existing:
             return JobCreatedResponse(
                 job_id=existing.id,
@@ -85,10 +90,10 @@ async def create_translation(
     # ── Step 2: Cache check ──────────────────────────────────
     # We can't check translation cache without the slip hash,
     # but we can check if the exact booking code was translated before
-    cached_result = await redis.get_booking_code(source, code)
+    cached_result = await redis.get_booking_code(tenant, source, code)
     if cached_result and cached_result.get("translations", {}).get(target):
         tx_data = cached_result["translations"][target]
-        logger.info("cache_hit", source=source, target=target, code=code)
+        logger.info("cache_hit", source=source, target=target, code_ref=sensitive_fingerprint(code))
 
         # Create a completed job for audit trail
         job_repo = JobRepository(db)
@@ -117,10 +122,10 @@ async def create_translation(
         api_key_id=api_key["id"],
     )
 
-    logger.info("job_created", job_id=job.id, source=source, target=target, code=code)
+    logger.info("job_created", job_id=job.id, source=source, target=target, code_ref=sensitive_fingerprint(code))
 
     # ── Step 4: Set dedup key ────────────────────────────────
-    await redis.set_dedup(source, code, target, job.id)
+    await redis.set_dedup(tenant, source, code, target, job.id)
 
     # ── Step 5: Enqueue Celery task ──────────────────────────
     execute_translation_pipeline.delay(job.id)
@@ -150,13 +155,14 @@ async def get_translation_status(
     3. Return current status + result if completed
     """
     # ── Fast path: Redis cache ───────────────────────────────
-    cached = await redis.get_job_status(job_id)
+    tenant = api_key["id"]
+    cached = await redis.get_job_status(tenant, job_id)
     if cached:
         return JobStatusResponse(**cached)
 
     # ── Slow path: Postgres ──────────────────────────────────
     job_repo = JobRepository(db)
-    job = await job_repo.get_by_id(job_id)
+    job = await job_repo.get_by_id(job_id, tenant)
 
     if not job:
         raise JobNotFound(job_id)
@@ -177,6 +183,6 @@ async def get_translation_status(
     )
 
     # Cache the response for fast polling
-    await redis.set_job_status(job_id, response.model_dump())
+    await redis.set_job_status(tenant, job_id, response.model_dump())
 
     return response

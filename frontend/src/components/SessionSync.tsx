@@ -16,6 +16,10 @@ const SYNC_INTERVAL_MS = 5 * 60_000;
  */
 export default function SessionSync() {
   useEffect(() => {
+    try {
+      const dark=localStorage.theme==='dark'||(!('theme' in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark',dark);
+    } catch { /* theme storage is best-effort */ }
     void syncSession();
 
     const interval = setInterval(() => {

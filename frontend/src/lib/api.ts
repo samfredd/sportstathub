@@ -67,6 +67,7 @@ const api = {
   // Teams
   searchTeams: (name?: string, sport?: string, opts?: FetchOptions) =>
     get('/api/teams/search', { name, sport }, { revalidate: 3600, ...opts }),
+  globalSearch: (q:string,opts?:FetchOptions)=>get('/api/search',{q},{cache:'no-store',...opts}),
   getTeamStatistics: (id: string | number, league: string | number, season: string | number, opts?: FetchOptions) =>
     get(`/api/teams/${id}/statistics`, { league, season }, { revalidate: 3600, ...opts }),
 

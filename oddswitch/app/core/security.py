@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import hashlib
 
-from fastapi import Depends, Request
+from fastapi import Request
 
 from app.cache.redis_client import RedisCache
+from app.config import get_settings
 from app.core.exceptions import AuthenticationError
 from app.db.engine import get_session_factory
 from app.db.repository import ApiKeyRepository
-from app.config import get_settings
 
 
 def hash_api_key(raw_key: str) -> str:

@@ -26,7 +26,7 @@ export function createAdminService(repo) {
   async function updateUser(adminId, id, payload) {
       const allowed: any = {};
     if (payload.role !== undefined) {
-      const VALID_ROLES = ['user', 'creator', 'admin'];
+      const VALID_ROLES = ['user', 'creator_pending', 'creator', 'creator_suspended', 'creator_rejected', 'moderator', 'admin'];
       if (!VALID_ROLES.includes(payload.role)) {
         throw Object.assign(new Error('Invalid role'), { statusCode: 400 });
       }
@@ -128,7 +128,7 @@ export function createAdminService(repo) {
 
   async function createSubscription(adminId, payload) {
     const VALID_PLANS   = ['free', 'pro', 'enterprise'];
-    const VALID_STATUS  = ['active', 'cancelled', 'expired', 'pending', 'failed'];
+    const VALID_STATUS  = ['active', 'grace', 'cancelled', 'expired', 'pending', 'failed'];
     if (!VALID_PLANS.includes(payload.plan)) {
       throw Object.assign(new Error('Invalid plan'), { statusCode: 400 });
     }
@@ -247,13 +247,15 @@ export function createAdminService(repo) {
   }
 
   async function createAdminPrediction(adminId, body) {
-    const { sport, league, matchData, prediction, isPremium, tags, isTrending, fixtureId } = body;
+    const { sport, schemaVersion, league, matchData, prediction, bookingCode, isPremium, tags, isTrending, fixtureId } = body;
     const created = await repo.createAdminPrediction({
       userId: adminId,
       sport,
       league,
       matchData,
       prediction,
+      bookingCode,
+      schemaVersion,
       isPremium: isPremium ?? false,
       tags: tags ?? [],
       isTrending: isTrending ?? false,
@@ -445,6 +447,23 @@ export function createAdminService(repo) {
     return repo.getSubscriptionFunnel();
   }
 
+  async function listCreatorApplications(status = 'pending') {
+    return repo.listCreatorApplications(status);
+  }
+
+  async function reviewCreatorApplication(adminId: number, id: number, payload: any) {
+    if (!['approve', 'reject'].includes(payload.decision)) {
+      throw Object.assign(new Error('Invalid review decision'), { statusCode: 400 });
+    }
+    const result = await repo.reviewCreatorApplication(adminId, id, payload.decision, payload.notes);
+    if (!result) throw Object.assign(new Error('Pending creator application not found'), { statusCode: 404 });
+    await repo.createAuditLog({
+      adminId, action: `creator.application_${payload.decision}d`, targetType: 'creator_application',
+      targetId: id, metadata: { userId: result.user_id, notes: payload.notes ?? null },
+    });
+    return result;
+  }
+
   // ─── SUSPEND / BAN USER ───────────────────────────────────
   async function suspendUser(adminId, userId, status: 'active' | 'suspended' | 'banned') {
     const updated = await repo.updateUser(userId, { status });
@@ -473,7 +492,7 @@ export function createAdminService(repo) {
     getCreatorLeaderboard,
     getFilteredAuditLogs,
     bulkUserAction,
-    getSubscriptionFunnel,
+    getSubscriptionFunnel, listCreatorApplications, reviewCreatorApplication,
     suspendUser,
   };
 }

@@ -7,7 +7,6 @@ This deployment is fully Dockerized:
 | Traefik | 80, 443 | Reverse proxy and Let's Encrypt SSL |
 | Frontend | internal 3000 | Next.js standalone container |
 | Backend | internal 4000 | Fastify container; runs migrations on start |
-| AI Service | internal 8000 | FastAPI prediction service |
 | OddSwitch API | internal 8000 | Booking-code translation API |
 | OddSwitch Workers | internal | Celery translation and browser workers |
 | PostgreSQL | internal 5432 | Persistent Docker volume |
@@ -33,7 +32,7 @@ cp .env.example .env
 nano .env
 ```
 
-Fill in `DOMAIN`, `ACME_EMAIL`, `DB_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, `ADMIN_INVITE_KEY`, and any API/OAuth/SMTP keys you use.
+Fill in `DOMAIN`, `ACME_EMAIL`, `DB_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `RESEND_API_KEY`, and any other API/OAuth keys you use.
 
 ## First Deploy
 
@@ -74,7 +73,6 @@ Published images:
 ```bash
 ghcr.io/YOUR_OWNER/YOUR_REPO/backend:latest
 ghcr.io/YOUR_OWNER/YOUR_REPO/frontend:latest
-ghcr.io/YOUR_OWNER/YOUR_REPO/ai-service:latest
 ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-api:latest
 ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-worker:latest
 ghcr.io/YOUR_OWNER/YOUR_REPO/oddswitch-browser-worker:latest
@@ -97,7 +95,7 @@ Automatic deployment runs after every successful push to `main`. Manual deployme
 
 OddSwitch runs on the Docker network at `http://oddswitch-api:8000`; the backend uses that URL in production. The deploy script also initializes submodules so the server can build OddSwitch locally when `DEPLOY_MODE=build`.
 
-Required server-side `/var/www/project/.env` values still include `DOMAIN`, `ACME_EMAIL`, `DB_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, and `ADMIN_INVITE_KEY`.
+Required server-side `/var/www/project/.env` values still include `DOMAIN`, `ACME_EMAIL`, `DB_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, and `MFA_ENCRYPTION_KEY`.
 
 ## Common Commands
 

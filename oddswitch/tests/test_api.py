@@ -15,7 +15,6 @@ import pytest
 
 from tests.conftest import TEST_API_KEY
 
-
 # ── Health Check ─────────────────────────────────────────────────────────────
 
 

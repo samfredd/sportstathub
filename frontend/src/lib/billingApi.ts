@@ -34,6 +34,12 @@ export const billingApi = {
     }),
   getHistory: (limit = 20, offset = 0) =>
     billingFetch(`/api/billing/history?limit=${limit}&offset=${offset}`),
+  getSubscription: () => billingFetch('/api/billing/subscription'),
+  cancelSubscription: (reason = '') => billingFetch('/api/billing/subscription/cancel', {
+    method: 'POST', body: JSON.stringify({ reason }),
+  }),
+  restoreSubscription: () => billingFetch('/api/billing/subscription/restore', { method: 'POST' }),
+  getReceipt: (receiptNumber: string) => billingFetch(`/api/billing/receipts/${encodeURIComponent(receiptNumber)}`),
 };
 
 export interface PaymentRecord {
@@ -46,4 +52,7 @@ export interface PaymentRecord {
   status: string;
   paid_at: string | null;
   created_at: string;
+  refunded_amount?: number;
+  dispute_status?: string | null;
+  receipt_number?: string | null;
 }

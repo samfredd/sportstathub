@@ -5,6 +5,7 @@ import Link from "next/link";
 import LeftLeagueSidebar from "@/components/LeftLeagueSidebar";
 import RightStatsSidebar from "@/components/RightStatsSidebar";
 import { withAuth } from "@/lib/authHeaders";
+import { SaveMatchButton } from "@/components/SaveMatchButton";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -1653,7 +1654,9 @@ export default function BasketballMatchPage({ params }: { params: Promise<{ id: 
                 <span className="text-[11px] text-muted/70">{game.league.country}</span>
               </>
             )}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              {isUpcoming&&<SaveMatchButton fixtureId={matchId} sport="basketball" startsAt={game.fixture.date}
+                homeTeam={homeName} awayTeam={awayName} league={game.league?.name}/>}
               <StatusBadge statusLong={game.fixture.status.long} statusShort={statusShort} />
             </div>
           </div>

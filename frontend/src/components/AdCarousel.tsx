@@ -479,7 +479,7 @@ export default function AdCarousel({
             )}
             <div className="w-full">
               {slide.label && (
-                <span className={`text-[9px] font-black uppercase tracking-[0.22em] px-2 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30 inline-block mb-1.5`}>
+                <span className={`text-[9px] font-black uppercase tracking-[0.22em] px-2 py-0.5 rounded border text-foreground ${accentBg}/20 ${accentBorder}/30 inline-block mb-1.5`}>
                   {slide.label}
                 </span>
               )}
@@ -488,7 +488,7 @@ export default function AdCarousel({
               {slide.body && <p className="text-[11px] text-muted leading-snug">{slide.body}</p>}
             </div>
             {slide.cta && (
-              renderCta(slide.cta, `w-full flex items-center justify-center mt-3 py-2 rounded-lg text-[12px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`)
+              renderCta(slide.cta, `w-full flex items-center justify-center mt-3 py-2 rounded-lg text-[12px] font-black border transition-all hover:opacity-90 text-foreground ${accentBg}/15 ${accentBorder}/25`)
             )}
           </div>
         ) : (
@@ -497,7 +497,7 @@ export default function AdCarousel({
             {slide.icon && <div className="mb-2">{slide.icon}</div>}
             <div className="w-full">
               {slide.label && (
-                <span className={`text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30 inline-block mb-1`}>
+                <span className={`text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border text-foreground ${accentBg}/20 ${accentBorder}/30 inline-block mb-1`}>
                   {slide.label}
                 </span>
               )}
@@ -506,7 +506,7 @@ export default function AdCarousel({
               {slide.body && <p className="text-[10px] text-muted leading-snug">{slide.body}</p>}
             </div>
             {slide.cta && (
-              renderCta(slide.cta, `w-full flex items-center justify-center mt-2.5 py-1.5 rounded-lg text-[11px] font-black border transition-all hover:opacity-90 ${accentText} ${accentBg}/15 ${accentBorder}/25`)
+              renderCta(slide.cta, `w-full flex items-center justify-center mt-2.5 py-1.5 rounded-lg text-[11px] font-black border transition-all hover:opacity-90 text-foreground ${accentBg}/15 ${accentBorder}/25`)
             )}
           </div>
         )}
@@ -548,7 +548,7 @@ export default function AdCarousel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             {slide.label && (
-              renderLabel(slide.label, `text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border ${accentText} ${accentBg}/20 ${accentBorder}/30`)
+              renderLabel(slide.label, `text-[9px] font-black uppercase tracking-[0.22em] px-1.5 py-0.5 rounded border text-foreground ${accentBg}/20 ${accentBorder}/30`)
             )}
             {slide.eyebrow && <span className="text-[9px] text-muted font-bold truncate">{slide.eyebrow}</span>}
           </div>
@@ -557,7 +557,7 @@ export default function AdCarousel({
         </div>
 
         {slide.cta && (
-          renderCta(slide.cta, `shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${accentText} ${accentBg}/15 ${accentBorder}/25 hover:${accentBg}/25`)
+          renderCta(slide.cta, `shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all text-foreground ${accentBg}/15 ${accentBorder}/25 hover:${accentBg}/25`)
         )}
       </div>
 

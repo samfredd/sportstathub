@@ -60,7 +60,7 @@ class TranslationJob(Base):
     error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     callback_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    api_key_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    api_key_id: Mapped[str] = mapped_column(String(26), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
@@ -76,6 +76,7 @@ class TranslationJob(Base):
             "target_bookmaker",
         ),
         Index("ix_jobs_status", "status"),
+        Index("ix_jobs_tenant_created", "api_key_id", "created_at"),
     )
 
 

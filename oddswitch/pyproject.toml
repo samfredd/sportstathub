@@ -1,13 +1,17 @@
 [build-system]
 requires = ["setuptools>=69.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta:__legacy__"
 
 [project]
 name = "oddswitch"
 version = "0.1.0"
 description = "Distributed booking code translation engine for sports bookmakers"
 requires-python = ">=3.11"
-readme = "README.md"
+readme = "INTEGRATION_GUIDE.md"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*", "projects*", "alembic*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -22,3 +26,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+# The legacy browser adapters contain long selectors/JavaScript strings and
+# compact market maps. Keep correctness, import, and unused-code checks blocking
+# while those formatting-only rules are paid down separately.
+ignore = ["E501", "E701", "E741", "N818"]

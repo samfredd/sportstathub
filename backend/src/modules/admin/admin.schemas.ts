@@ -21,7 +21,7 @@ export const userParamSchema     = idParam;
 export const updateUserSchema = {
   type: 'object',
   properties: {
-    role:        { type: 'string', enum: ['user', 'creator', 'admin'] },
+    role:        { type: 'string', enum: ['user', 'creator_pending', 'creator', 'creator_suspended', 'creator_rejected', 'moderator', 'admin'] },
     is_verified: { type: 'boolean' },
     status:      { type: 'string', enum: ['active', 'suspended', 'banned'] },
   },
@@ -95,6 +95,7 @@ export const createPlanSchema = {
     isActive:      { type: 'boolean' },
     isPopular:     { type: 'boolean' },
     sortOrder:     { type: 'integer' },
+    gracePeriodDays:{type:'integer',minimum:0,maximum:30},
   },
   additionalProperties: false,
 };
@@ -112,6 +113,7 @@ export const updatePlanSchema = {
     isActive:      { type: 'boolean' },
     isPopular:     { type: 'boolean' },
     sortOrder:     { type: 'integer' },
+    gracePeriodDays:{type:'integer',minimum:0,maximum:30},
   },
   additionalProperties: false,
 };
@@ -126,7 +128,7 @@ export const createSubscriptionSchema = {
   properties: {
     userId:    { type: 'integer' },
     plan:      { type: 'string', enum: ['free', 'pro', 'enterprise'] },
-    status:    { type: 'string', enum: ['active', 'cancelled', 'expired', 'pending', 'failed'], default: 'active' },
+    status:    { type: 'string', enum: ['active', 'grace', 'cancelled', 'expired', 'pending', 'failed'], default: 'active' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
     notes:     { type: 'string', nullable: true },
   },
@@ -137,7 +139,7 @@ export const updateSubscriptionSchema = {
   type: 'object',
   properties: {
     plan:      { type: 'string', enum: ['free', 'pro', 'enterprise'] },
-    status:    { type: 'string', enum: ['active', 'cancelled', 'expired', 'pending', 'failed'] },
+    status:    { type: 'string', enum: ['active', 'grace', 'cancelled', 'expired', 'pending', 'failed'] },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
     notes:     { type: 'string', nullable: true },
   },

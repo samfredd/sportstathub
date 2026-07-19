@@ -10,6 +10,7 @@ import {
   createPlanSchema, updatePlanSchema,
   changePasswordSchema,
 } from './admin.schemas.js';
+import { createPredictionSchema } from '../community/community.schemas.js';
 
 async function adminRoutes(fastify) {
   const repo  = createAdminRepository(fastify.db);
@@ -17,6 +18,7 @@ async function adminRoutes(fastify) {
   const ctrl  = createAdminController(svc);
 
   const guard = { onRequest: [fastify.requireAdmin] };
+  const sensitiveGuard = { onRequest: [fastify.requireRecentAdminAuth] };
   const idParam = { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } };
 
   // ─── Stats ────────────────────────────────────────────────
@@ -42,12 +44,12 @@ async function adminRoutes(fastify) {
   }, ctrl.getUserById);
 
   fastify.put('/api/admin/users/:id', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam, body: updateUserSchema },
   }, ctrl.updateUser);
 
   fastify.delete('/api/admin/users/:id', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam },
   }, ctrl.deleteUser);
 
@@ -137,13 +139,15 @@ async function adminRoutes(fastify) {
         type: 'object',
         required: ['sport', 'league', 'matchData', 'prediction'],
         properties: {
-          sport:       { type: 'string', minLength: 2, maxLength: 50 },
-          league:      { type: 'object', additionalProperties: true },
-          matchData:   { type: 'object', additionalProperties: true },
-          prediction:  { type: 'object', additionalProperties: true },
+          sport:       createPredictionSchema.properties.sport,
+          schemaVersion: createPredictionSchema.properties.schemaVersion,
+          league:      createPredictionSchema.properties.league,
+          matchData:   createPredictionSchema.properties.match,
+          prediction:  createPredictionSchema.properties.prediction,
+          bookingCode: createPredictionSchema.properties.bookingCode,
           isPremium:   { type: 'boolean', default: false },
           isTrending:  { type: 'boolean', default: false },
-          tags:        { type: 'array', items: { type: 'string' }, default: [] },
+          tags:        createPredictionSchema.properties.tags,
           fixtureId:   { type: 'integer', nullable: true },
         },
         additionalProperties: false,
@@ -210,6 +214,19 @@ async function adminRoutes(fastify) {
 
   // ─── Creator Leaderboard ──────────────────────────────────
   fastify.get('/api/admin/creators', guard, ctrl.getCreatorLeaderboard);
+  fastify.get('/api/admin/creator-applications', {
+    ...guard,
+    schema: { querystring: { type: 'object', properties: {
+      status: { type: 'string', enum: ['pending','approved','rejected','withdrawn'], default: 'pending' },
+    }, additionalProperties: false } },
+  }, ctrl.getCreatorApplications);
+  fastify.post('/api/admin/creator-applications/:id/review', {
+    ...guard,
+    schema: { params: idParam, body: { type: 'object', required: ['decision'], properties: {
+      decision: { type: 'string', enum: ['approve','reject'] },
+      notes: { type: 'string', maxLength: 2000 },
+    }, additionalProperties: false } },
+  }, ctrl.reviewCreatorApplication);
 
   // ─── Filtered Audit Logs ──────────────────────────────────
   const filteredAuditQuery = {

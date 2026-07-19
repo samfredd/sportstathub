@@ -70,6 +70,13 @@ function makeRepo(overrides: Record<string, any> = {}) {
       calls.push({ method: 'activateSubscription', payload });
       return { id: 42, ...payload };
     },
+    async settleVerifiedPayment(reference: string, verification: any) {
+      calls.push({ method: 'settleVerifiedPayment', reference, verification });
+      return {
+        payment: { reference, status: 'success', subscription_id: 42 },
+        subscription: { id: 42, user_id: 7, plan: 'pro' },
+      };
+    },
     ...overrides,
   };
   return repo;
@@ -137,10 +144,9 @@ test('verifyPayment activates subscription after a successful Paystack verificat
 
   assert.equal(result.payment.status, 'success');
   assert.equal(result.subscription.plan, 'pro');
-  const activation = repo.calls.find((call) => call.method === 'activateSubscription');
-  assert.equal(activation.payload.userId, 7);
-  assert.equal(activation.payload.plan, 'pro');
-  assert.equal(repo.calls.at(-1).payload.subscriptionId, 42);
+  const settlement = repo.calls.find((call) => call.method === 'settleVerifiedPayment');
+  assert.equal(settlement.reference, 'pst_pro_abc');
+  assert.equal(settlement.verification.currency, 'USD');
 });
 
 test('verifyPayment rejects mismatched Paystack amount without activating subscription', async () => {
@@ -163,7 +169,7 @@ test('verifyPayment rejects mismatched Paystack amount without activating subscr
     /Payment verification mismatch/
   );
 
-  assert.equal(repo.calls.some((call) => call.method === 'activateSubscription'), false);
+  assert.equal(repo.calls.some((call) => call.method === 'settleVerifiedPayment'), false);
 });
 
 test('verifyPayment reports 409 when another caller holds the processing claim', async () => {
@@ -213,4 +219,37 @@ test('verifyPayment returns the settled payment when the race winner already suc
   assert.equal(result.payment.status, 'success');
   assert.equal(result.subscription.plan, 'pro');
   assert.equal(paystack.calls.length, 0);
+});
+
+test('cancellation preserves the active subscription and schedules period-end cancellation', async () => {
+  const repo = makeRepo({ async cancelAtPeriodEnd(userId: number, reason: string) {
+    return { id: 42, user_id: userId, status: 'active', cancel_at_period_end: true, cancellation_reason: reason };
+  }});
+  const service = createBillingService({repo,paystack:makePaystack()});
+  const result = await service.cancelSubscription({id:7},'Taking a break');
+  assert.equal(result.status,'active');
+  assert.equal(result.cancel_at_period_end,true);
+});
+
+test('subscription restoration rejects when no paid entitlement remains', async () => {
+  const repo = makeRepo({async restoreSubscription(){return null;}});
+  const service=createBillingService({repo,paystack:makePaystack()});
+  await assert.rejects(()=>service.restoreSubscription({id:7}),(error:any)=>error.statusCode===404);
+});
+
+test('receipt access is scoped to the authenticated account', async () => {
+  const repo=makeRepo({async findReceiptForUser(receiptNumber:string,userId:number){
+    return userId===7?{receipt_number:receiptNumber,user_id:userId}:null;
+  }});
+  const service=createBillingService({repo,paystack:makePaystack()});
+  assert.equal((await service.getReceipt({id:7},'SSH-2026-00000010')).user_id,7);
+  await assert.rejects(()=>service.getReceipt({id:8},'SSH-2026-00000010'),(error:any)=>error.statusCode===404);
+});
+
+test('admin entitlement repair requires an active paid plan and a future expiry', async () => {
+  const repo=makeRepo({async repairEntitlement(adminId:number,input:any){return {id:51,adminId,...input};}});
+  const service=createBillingService({repo,paystack:makePaystack()});
+  await assert.rejects(()=>service.repairEntitlement({id:1},{userId:7,plan:'pro',expiresAt:'2020-01-01T00:00:00Z',reason:'repair'}),/future/);
+  const result=await service.repairEntitlement({id:1},{userId:7,plan:'pro',expiresAt:'2099-01-01T00:00:00Z',reason:'provider reconciliation'});
+  assert.equal(result.id,51);
 });

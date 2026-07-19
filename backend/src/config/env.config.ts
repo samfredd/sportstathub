@@ -5,6 +5,15 @@ dotenv.config();
 if (!process.env.SECRET_KEY) {
   throw new Error('SECRET_KEY environment variable is required — server cannot start without a JWT signing secret');
 }
+if (process.env.NODE_ENV === 'production' && !process.env.MFA_ENCRYPTION_KEY) {
+  throw new Error('MFA_ENCRYPTION_KEY is required in production');
+}
+if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+  throw new Error('RESEND_API_KEY is required in production for account verification and recovery');
+}
+if (process.env.NODE_ENV === 'production' && !process.env.EMAIL_FROM) {
+  throw new Error('EMAIL_FROM is required in production and must use a Resend-verified domain');
+}
 
 const config = {
   port: Number(process.env.PORT || 4000),
@@ -46,9 +55,9 @@ const config = {
   redisPort:     Number(process.env.REDIS_PORT || 6379),
   redisPassword: process.env.REDIS_PASSWORD || null,
 
-  // Admin invite key — required to create new admin accounts via /auth/admin/register
-  // Set a strong random string; leave unset to disable admin self-registration
-  adminInviteKey: process.env.ADMIN_INVITE_KEY || null,
+  // Encrypts administrator TOTP secrets at rest. Use an independent random
+  // value in production; SECRET_KEY is only a development compatibility fallback.
+  mfaEncryptionKey: process.env.MFA_ENCRYPTION_KEY || null,
 
   // NVIDIA AI (build.nvidia.com / NIM) — hosted LLM inference for AI match predictions
   // Get an API key at https://build.nvidia.com
@@ -56,18 +65,14 @@ const config = {
   nvidiaBaseUrl: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
   nvidiaModel:   process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-super-120b-a12b',
 
-  // OTP verification — set REQUIRE_OTP=false to skip email verification on register
-  // and return a JWT directly (useful during development or soft-launch)
-  requireOtp: process.env.REQUIRE_OTP !== 'false',
+  // Email verification may only be bypassed in a non-production environment.
+  requireOtp: process.env.NODE_ENV === 'production' || process.env.REQUIRE_OTP !== 'false',
 
-  // SMTP / Nodemailer — leave smtpHost unset to disable email sending
-  smtpHost:      process.env.SMTP_HOST     || null,
-  smtpPort:      parseInt(process.env.SMTP_PORT || '587', 10),
-  smtpSecure:    process.env.SMTP_SECURE   === 'true', // true = port 465 (SSL), false = 587 (STARTTLS)
-  smtpUser:      process.env.SMTP_USER     || null,
-  smtpPass:      process.env.SMTP_PASS     || null,
+  // Resend HTTP API — leave unset only in local/test environments.
+  resendApiKey:  process.env.RESEND_API_KEY || null,
   emailFrom:     process.env.EMAIL_FROM    || 'no-reply@example.com',
-  emailFromName: process.env.EMAIL_FROM_NAME || 'My App',
+  emailFromName: process.env.EMAIL_FROM_NAME || 'SportStatHub',
+  contactEmail:  process.env.CONTACT_EMAIL || process.env.EMAIL_FROM || 'no-reply@example.com',
 
   // Paystack — checkout is initialized and verified server-side
   paystackSecretKey:  process.env.PAYSTACK_SECRET_KEY || null,

@@ -2,16 +2,10 @@
  * Creates or promotes a user to admin role.
  *
  * Usage:
- *   node seed-admin.js [email] [password] [username]
+ *   npm run seed-admin -- <email> <password> <username>
  *
- * Defaults:
- *   email:    admin@admin.com
- *   password: Admin123!
- *   username: admin
- *
- * If a user with that email already exists their role is promoted to 'admin'
- * and the account is marked as verified. The password is only updated if the
- * account is newly created.
+ * This is the only supported first-administrator bootstrap. Credentials are
+ * required explicitly and are never defaulted or printed.
  */
 
 import pg from 'pg';
@@ -23,28 +17,33 @@ dotenv.config();
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const email    = process.argv[2] || 'admin@admin.com';
-const password = process.argv[3] || 'Admin123!';
-const username = process.argv[4] || 'admin';
+const email    = process.argv[2]?.trim().toLowerCase();
+const password = process.argv[3];
+const username = process.argv[4]?.trim().toLowerCase();
+
+if (!email || !password || !username || password.length < 12) {
+  console.error('Usage: npm run seed-admin -- <email> <password-of-at-least-12-characters> <username>');
+  process.exit(1);
+}
 
 try {
   const hash = await bcrypt.hash(password, 10);
 
   const { rows } = await pool.query(
-    `INSERT INTO users (username, email, password, role, is_verified)
-     VALUES ($1, $2, $3, 'admin', TRUE)
-     ON CONFLICT (email)
-       DO UPDATE SET role = 'admin', is_verified = TRUE
+    `INSERT INTO users (username, email, password, role, is_verified, mfa_required)
+     VALUES ($1, $2, $3, 'admin', TRUE, TRUE)
+     ON CONFLICT DO NOTHING
      RETURNING id, username, email, role`,
     [username, email, hash]
   );
 
-  console.log('\nAdmin user ready:');
+  if (!rows[0]) throw new Error('An account with that email or username already exists; bootstrap will not promote it implicitly');
+  console.log('\nAdmin user created; MFA enrollment is required at first login:');
   console.log(`  ID:       ${rows[0].id}`);
   console.log(`  Username: ${rows[0].username}`);
   console.log(`  Email:    ${rows[0].email}`);
   console.log(`  Role:     ${rows[0].role}`);
-  console.log('\nLogin at /admin/login with the email and password above.\n');
+  console.log('\nLogin at /admin/login to enroll MFA.\n');
 } finally {
   await pool.end();
 }

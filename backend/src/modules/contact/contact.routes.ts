@@ -14,14 +14,17 @@ const bodySchema = {
 };
 
 async function contactRoutes(fastify) {
-  fastify.post('/api/contact', { schema: { body: bodySchema } }, async (request, reply) => {
+  fastify.post('/api/contact', {
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
+    schema: { body: bodySchema },
+  }, async (request, reply) => {
     const { name, email, message } = request.body;
 
-    if (config.smtpHost) {
+    if (config.resendApiKey) {
       const mailer = createMailerService(config);
       await mailer.sendContactEmail({ name, email, message });
     } else {
-      request.log.info({ name, email }, 'Contact form submission (SMTP not configured)');
+      request.log.info('Contact form accepted while Resend is not configured');
     }
 
     return reply.status(200).send({ status: 'success', message: 'Message received' });

@@ -19,7 +19,7 @@ export function createCommunityController(service) {
   }
 
   async function listCreators(request, reply) {
-    const data = await service.listCreators();
+    const data = await service.listCreators(request.query);
     return ok(reply, data);
   }
 
@@ -29,7 +29,7 @@ export function createCommunityController(service) {
   }
 
   async function listThreads(request, reply) {
-    const data = await service.listThreads(request.query);
+    const data = await service.listThreads(request.query, request.user ?? null);
     return ok(reply, data);
   }
 
@@ -62,6 +62,7 @@ export function createCommunityController(service) {
     const data = await service.getPlatformStats();
     return ok(reply, data);
   }
+  async function globalSearch(request,reply){return ok(reply,await service.globalSearch(request.query.q));}
 
   async function getLeaderboard(request, reply) {
     const data = await service.getLeaderboard();
@@ -72,6 +73,7 @@ export function createCommunityController(service) {
     const data = await service.getCreatorDashboard(request.user);
     return ok(reply, data);
   }
+  async function getCreatorPerformance(request, reply) { return ok(reply,await service.getCreatorPerformance(Number(request.params.id))); }
 
   async function getUserDashboard(request, reply) {
     const data = await service.getUserDashboard(request.user);
@@ -89,7 +91,7 @@ export function createCommunityController(service) {
   }
 
   async function becomeCreator(request, reply) {
-    const data = await service.becomeCreator(request.user.id);
+    const data = await service.becomeCreator(request.user.id, request.body);
     return ok(reply, data);
   }
 
@@ -118,6 +120,24 @@ export function createCommunityController(service) {
     return ok(reply, data);
   }
 
+  async function updateThread(request, reply) { return ok(reply, await service.updateContent(request.user,'thread',Number(request.params.id),request.body)); }
+  async function deleteThread(request, reply) { return ok(reply, await service.deleteContent(request.user,'thread',Number(request.params.id))); }
+  async function updateComment(request, reply) { return ok(reply, await service.updateContent(request.user,'comment',Number(request.params.id),request.body)); }
+  async function deleteComment(request, reply) { return ok(reply, await service.deleteContent(request.user,'comment',Number(request.params.id))); }
+  async function reportContent(request, reply) { return reply.status(201).send({ status:'success',data:await service.reportContent(request.user,request.body) }); }
+  async function setRelationship(request, reply) { return ok(reply,await service.setRelationship(request.user,Number(request.params.id),request.body)); }
+  async function moderationQueue(request, reply) { return ok(reply,await service.listModerationQueue(request.query.status,request.query.limit)); }
+  async function moderateContent(request, reply) { return ok(reply,await service.moderateContent(request.user,request.body)); }
+  async function appealModeration(request, reply) { return reply.status(201).send({status:'success',data:await service.appealModeration(request.user,request.body)}); }
+  async function resolveAppeal(request,reply){return ok(reply,await service.resolveAppeal(request.user,request.body));}
+  async function listNotifications(request, reply) { return ok(reply,await service.listNotifications(request.user,request.query.limit)); }
+  async function markNotificationsRead(request, reply) { return ok(reply,await service.markNotificationsRead(request.user,request.body?.ids)); }
+  async function getNotificationPreferences(request, reply) { return ok(reply,await service.getNotificationPreferences(request.user)); }
+  async function updateNotificationPreferences(request, reply) { return ok(reply,await service.updateNotificationPreferences(request.user,request.body)); }
+  async function saveMatch(request,reply){return ok(reply,await service.saveMatch(request.user,{...request.body,fixtureId:request.params.fixtureId}));}
+  async function listSavedMatches(request,reply){return ok(reply,await service.listSavedMatches(request.user));}
+  async function deleteSavedMatch(request,reply){return ok(reply,await service.deleteSavedMatch(request.user,request.params.fixtureId,request.query.sport));}
+
   return {
     listPredictions,
     getPrediction,
@@ -131,8 +151,10 @@ export function createCommunityController(service) {
     createComment,
     track,
     getPlatformStats,
+    globalSearch,
     getLeaderboard,
     getCreatorDashboard,
+    getCreatorPerformance,
     getUserDashboard,
     getMe,
     updateProfile,
@@ -142,5 +164,9 @@ export function createCommunityController(service) {
     likeThread,
     likeComment,
     toggleFollow,
+    updateThread,deleteThread,updateComment,deleteComment,reportContent,setRelationship,
+    moderationQueue,moderateContent,appealModeration,resolveAppeal,listNotifications,markNotificationsRead,
+    getNotificationPreferences,updateNotificationPreferences,
+    saveMatch,listSavedMatches,deleteSavedMatch,
   };
 }

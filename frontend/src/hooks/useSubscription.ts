@@ -37,6 +37,10 @@ export function useSubscription(): SubscriptionState {
     // Optimistic hint from the non-sensitive descriptor, then confirm with the
     // server (auth travels in the httpOnly cookie, so /api/me is the source of truth).
     const hint = getSessionUser();
+    if (!hint) {
+      setState(current=>({...current,loading:false,isLoggedIn:false}));
+      return;
+    }
     if (hint?.role === "admin") {
       setState(s => ({ ...s, isLoggedIn: true, isAdmin: true, isPro: true, isFree: false }));
     }
@@ -47,7 +51,7 @@ export function useSubscription(): SubscriptionState {
         const status: string | null = profile.subscription_status ?? null;
         const expiresAt = profile.subscription_expires_at ?? null;
         const isAdmin = profile.role === "admin";
-        const isActive = status === "active" && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+        const isActive = (status === "active" || status === "grace") && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
         const isPaidPlan = !!plan && plan !== "free";
         const isPro = isAdmin || (isActive && isPaidPlan);
         setState({

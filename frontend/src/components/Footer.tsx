@@ -116,7 +116,7 @@ export default function Footer() {
 
         {/* Disclaimer */}
         <div className="py-4 md:py-5 border-t border-border/40">
-          <p className="text-[11px] text-muted/70 leading-relaxed max-w-3xl">
+          <p className="text-[11px] text-muted leading-relaxed max-w-3xl">
             <span className="font-bold text-muted">18+ only.</span> SportStatHub is for informational and entertainment purposes only. We do not accept bets or promote gambling. Always gamble responsibly. If gambling is causing you harm, visit{" "}
             <a href="https://www.begambleaware.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent transition-colors">
               BeGambleAware.org
@@ -126,7 +126,7 @@ export default function Footer() {
 
         {/* Bottom bar */}
         <div className="py-3 md:py-4 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-2 md:gap-3">
-          <p className="text-[11px] text-muted/60">
+          <p className="text-[11px] text-muted">
             © {year} SportStatHub. All rights reserved.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
@@ -134,7 +134,7 @@ export default function Footer() {
               <Link
                 key={label}
                 href={href}
-                className="text-[11px] text-muted/60 hover:text-accent transition-colors"
+                className="text-[11px] text-muted hover:text-accent transition-colors"
               >
                 {label}
               </Link>

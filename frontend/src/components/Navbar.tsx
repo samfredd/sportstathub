@@ -76,21 +76,21 @@ export default function Navbar() {
                   {label}
                 </NavLink>
               ))}
-              <button
-                className="ml-3 px-3 py-1.5 bg-accent-gold/10 text-accent-gold text-[10px] font-black rounded-lg hover:bg-accent-gold/20 transition-all flex items-center gap-1.5 border border-accent-gold/25 cursor-pointer"
+              <Link href="/dashboard/subscription"
+                className="ml-3 px-3 py-1.5 bg-accent-gold/10 text-accent-gold-hover text-[10px] font-black rounded-lg hover:bg-accent-gold/20 transition-all flex items-center gap-1.5 border border-accent-gold/25 cursor-pointer"
                 aria-label="Open Pro plan details"
                 title="Open Pro plan details"
               >
                 <LockIcon className="w-3 h-3" /> PRO
-              </button>
+              </Link>
             </div>
           </div>
 
           {/* Right Actions */}
           <div className="flex items-center gap-2">
-            <button className="text-muted hover:text-foreground p-2 hidden sm:flex transition-all hover:bg-surface-hover rounded-xl cursor-pointer" aria-label="Search">
+            <Link href="/search" className="text-muted hover:text-foreground p-2 hidden sm:flex transition-all hover:bg-surface-hover rounded-xl cursor-pointer" aria-label="Search">
               <SearchIcon className="w-4.5 h-4.5" />
-            </button>
+            </Link>
             <ThemeToggle />
 
             <div className="hidden sm:flex items-center gap-2 border-l border-border ml-1 pl-3">

@@ -15,7 +15,6 @@ Layers:
 from __future__ import annotations
 
 import asyncio
-import math
 import random
 from typing import Any
 

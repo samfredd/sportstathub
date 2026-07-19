@@ -2,22 +2,26 @@ import fp from 'fastify-plugin';
 import { isSubscriptionActive } from '../helpers/access-control.helpers.js';
 
 async function authenticatePlugin(fastify) {
-  async function loadCurrentUser(id: number) {
+  async function loadCurrentUser(id: number, sessionId: string, sessionVersion: number) {
+    if (!sessionId || !Number.isInteger(sessionVersion)) return null;
     const { rows } = await fastify.db.query(
       `SELECT u.id, u.username, u.email, u.role, u.status, u.is_verified,
+              u.session_version, u.mfa_required, u.mfa_enrolled_at,
               s.plan AS subscription_plan,
               s.status AS subscription_status,
-              s.expires_at AS subscription_expires_at
+              CASE WHEN s.status='grace' THEN s.grace_ends_at ELSE s.expires_at END AS subscription_expires_at
        FROM users u
+       JOIN auth_sessions auths ON auths.id = $2 AND auths.user_id = u.id
+         AND auths.revoked_at IS NULL AND auths.expires_at > NOW()
        LEFT JOIN LATERAL (
-         SELECT plan, status, expires_at
+         SELECT plan, status, expires_at, grace_ends_at
          FROM subscriptions
          WHERE user_id = u.id
-         ORDER BY created_at DESC
+         ORDER BY CASE WHEN status IN ('active','grace') THEN 0 ELSE 1 END, created_at DESC
          LIMIT 1
        ) s ON TRUE
-       WHERE u.id = $1`,
-      [id]
+       WHERE u.id = $1 AND u.session_version = $3 AND auths.session_version = $3`,
+      [id, sessionId, sessionVersion]
     );
     return rows[0] ?? null;
   }
@@ -25,14 +29,19 @@ async function authenticatePlugin(fastify) {
   async function verifyAndLoadUser(request, reply) {
     try {
       await request.jwtVerify();
-      const currentUser = await loadCurrentUser(Number(request.user?.id));
+      const tokenUser = request.user;
+      const currentUser = await loadCurrentUser(
+        Number(request.user?.id), String(request.user?.sid || ''), Number(request.user?.sv));
       if (!currentUser) {
         return reply.status(401).send({ status: 'error', error: 'Unauthorized' });
       }
       if (currentUser.status && currentUser.status !== 'active') {
         return reply.status(403).send({ status: 'error', error: `Account is ${currentUser.status}` });
       }
-      request.user = currentUser;
+      if (currentUser.role === 'admin' && (!currentUser.mfa_required || !currentUser.mfa_enrolled_at)) {
+        return reply.status(403).send({ status: 'error', error: 'Administrator MFA is required' });
+      }
+      request.user = { ...currentUser, session_id: String(tokenUser?.sid), auth_time: tokenUser?.auth_time };
     } catch {
       return reply.status(401).send({ status: 'error', error: 'Unauthorized' });
     }
@@ -49,9 +58,10 @@ async function authenticatePlugin(fastify) {
     if (!hasCredential) return;
     try {
       await request.jwtVerify();
-      const currentUser = await loadCurrentUser(Number(request.user?.id));
+      const currentUser = await loadCurrentUser(
+        Number(request.user?.id), String(request.user?.sid || ''), Number(request.user?.sv));
       request.user = (currentUser && (!currentUser.status || currentUser.status === 'active'))
-        ? currentUser
+        ? { ...currentUser, session_id: String(request.user?.sid) }
         : null;
     } catch {
       request.user = null;
@@ -63,6 +73,15 @@ async function authenticatePlugin(fastify) {
     if (reply.sent) return;
     if (request.user?.role !== 'admin') {
       return reply.status(403).send({ status: 'error', error: 'Forbidden: admin access required' });
+    }
+  });
+
+  fastify.decorate('requireRecentAdminAuth', async function (request, reply) {
+    await fastify.requireAdmin(request, reply);
+    if (reply.sent) return;
+    const authTime = Number(request.user?.auth_time || 0);
+    if (!authTime || Date.now() / 1000 - authTime > 10 * 60) {
+      return reply.status(401).send({ status: 'error', error: 'Recent MFA authentication is required' });
     }
   });
 

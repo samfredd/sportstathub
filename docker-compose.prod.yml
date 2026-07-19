@@ -57,20 +57,16 @@ services:
       GOOGLE_CLIENT_ID:      "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET:  "${GOOGLE_CLIENT_SECRET:-}"
       GOOGLE_REDIRECT_URI:   "https://${DOMAIN}/auth/google/callback"
-      ADMIN_INVITE_KEY:      "${ADMIN_INVITE_KEY}"
+      MFA_ENCRYPTION_KEY:    "${MFA_ENCRYPTION_KEY}"
       REQUIRE_OTP:           "${REQUIRE_OTP:-true}"
       PAYSTACK_PUBLIC_KEY:    "${PAYSTACK_PUBLIC_KEY:-}"
       PAYSTACK_SECRET_KEY:    "${PAYSTACK_SECRET_KEY:-}"
       PAYSTACK_CALLBACK_URL:  "https://${DOMAIN}/dashboard/subscription"
-      AI_SERVICE_URL:         "http://ai-service:8000"
       ODDSWITCH_URL:         "http://oddswitch-api:8000"
-      SMTP_HOST:             "${SMTP_HOST:-}"
-      SMTP_PORT:             "${SMTP_PORT:-587}"
-      SMTP_SECURE:           "${SMTP_SECURE:-false}"
-      SMTP_USER:             "${SMTP_USER:-}"
-      SMTP_PASS:             "${SMTP_PASS:-}"
-      EMAIL_FROM:            "no-reply@${DOMAIN}"
-      EMAIL_FROM_NAME:       "SportStatHub"
+      RESEND_API_KEY:        "${RESEND_API_KEY:-}"
+      EMAIL_FROM:            "${EMAIL_FROM:-no-reply@${DOMAIN}}"
+      EMAIL_FROM_NAME:       "${EMAIL_FROM_NAME:-SportStatHub}"
+      CONTACT_EMAIL:         "${CONTACT_EMAIL:-support@${DOMAIN}}"
       NVIDIA_API_KEY:        "${NVIDIA_API_KEY}"
       NVIDIA_BASE_URL:       "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}"
       NVIDIA_MODEL:          "${NVIDIA_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
@@ -79,12 +75,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      ai-service:
-        condition: service_healthy
       oddswitch-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -96,7 +90,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
       # Route /api /auth /health → backend
-      - "traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || Path(`/health`) || (PathPrefix(`/auth`) && (Method(`POST`) || PathPrefix(`/auth/google`))))"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/health`) || (PathPrefix(`/auth`) && (Method(`POST`) || PathPrefix(`/auth/google`))))"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.tls.certresolver=le"
@@ -137,23 +131,6 @@ services:
       - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
       - "traefik.http.routers.frontend.middlewares=www-redirect"
 
-  # ── FastAPI prediction service ────────────────────────────────────────────
-  ai-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-sportstathub}/ai-service:${IMAGE_TAG:-latest}
-    build:
-      context: ./ai-service
-      dockerfile: Dockerfile
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    networks:
-      - web
-      - internal
-
   # ── OddSwitch booking-code translation engine ────────────────────────────
   oddswitch-db-init:
     image: postgres:16-alpine
@@ -188,6 +165,8 @@ services:
       CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      WEBHOOK_SIGNING_SECRET: "${ODDSWITCH_WEBHOOK_SIGNING_SECRET}"
+      CORS_ORIGINS: "https://${DOMAIN}"
     depends_on:
       oddswitch-db-init:
         condition: service_completed_successfully
@@ -216,6 +195,7 @@ services:
       CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      WEBHOOK_SIGNING_SECRET: "${ODDSWITCH_WEBHOOK_SIGNING_SECRET}"
     depends_on:
       oddswitch-api:
         condition: service_healthy
@@ -236,6 +216,7 @@ services:
       CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD}@redis:6379/5"
       LOG_FORMAT: json
       LOG_LEVEL: INFO
+      WEBHOOK_SIGNING_SECRET: "${ODDSWITCH_WEBHOOK_SIGNING_SECRET}"
     depends_on:
       oddswitch-api:
         condition: service_healthy

@@ -9,16 +9,13 @@ Shared fixtures for async tests:
 
 from __future__ import annotations
 
-import hashlib
 from unittest.mock import AsyncMock, patch
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.config import Settings, get_settings
+from app.config import Settings
 from app.core.security import hash_api_key
-
 
 # ── Test Settings ────────────────────────────────────────────────────────────
 
@@ -47,16 +44,16 @@ class MockRedisCache:
     def __init__(self):
         self._store: dict[str, str] = {}
 
-    async def get_booking_code(self, bookmaker, code):
+    async def get_booking_code(self, tenant, bookmaker, code):
         return None
 
-    async def set_booking_code(self, bookmaker, code, data, *, prematch=False):
+    async def set_booking_code(self, tenant, bookmaker, code, data, *, prematch=False):
         pass
 
-    async def get_translation(self, slip_hash, target):
+    async def get_translation(self, tenant, slip_hash, target):
         return None
 
-    async def set_translation(self, slip_hash, target, data, *, prematch=False):
+    async def set_translation(self, tenant, slip_hash, target, data, *, prematch=False):
         pass
 
     async def get_slip(self, slip_hash):
@@ -65,19 +62,19 @@ class MockRedisCache:
     async def set_slip(self, slip_hash, data):
         pass
 
-    async def check_dedup(self, source, code, target):
-        return self._store.get(f"dedup:{source}:{code}:{target}")
+    async def check_dedup(self, tenant, source, code, target):
+        return self._store.get(f"{tenant}:dedup:{source}:{code}:{target}")
 
-    async def set_dedup(self, source, code, target, job_id):
-        self._store[f"dedup:{source}:{code}:{target}"] = job_id
+    async def set_dedup(self, tenant, source, code, target, job_id):
+        self._store[f"{tenant}:dedup:{source}:{code}:{target}"] = job_id
 
-    async def clear_dedup(self, source, code, target):
-        self._store.pop(f"dedup:{source}:{code}:{target}", None)
+    async def clear_dedup(self, tenant, source, code, target):
+        self._store.pop(f"{tenant}:dedup:{source}:{code}:{target}", None)
 
-    async def get_job_status(self, job_id):
+    async def get_job_status(self, tenant, job_id):
         return None
 
-    async def set_job_status(self, job_id, data):
+    async def set_job_status(self, tenant, job_id, data):
         pass
 
     async def get_api_key(self, key_hash):
@@ -132,7 +129,6 @@ async def client(mock_redis):
       - Celery task with no-op
       - DB session with mock
     """
-    from contextlib import asynccontextmanager
     from app.main import create_app
 
     app = create_app()

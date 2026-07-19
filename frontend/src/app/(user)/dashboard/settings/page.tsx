@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { communityApi } from "@/lib/communityApi";
-import { getSessionUser, logout as sessionLogout } from "@/lib/session";
+import {
+  getSessionUser, listActiveSessions, logout as sessionLogout,
+  revokeActiveSession, revokeOtherSessions, type ActiveSession,
+} from "@/lib/session";
 
 function passwordStrength(pw: string) {
   let score = 0;
@@ -38,6 +41,8 @@ function sessionInfo(exp?: number, iat?: number) {
 export default function UserSettingsPage() {
   const router = useRouter();
   const [user, setUser]             = useState<any>(null);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // Password
   const [currentPw, setCurrentPw]   = useState("");
@@ -59,7 +64,31 @@ export default function UserSettingsPage() {
     // Show stored descriptor immediately, then refresh from the server.
     setUser(getSessionUser());
     communityApi.getMe().then((me: any) => setUser(me)).catch(() => {});
+    listActiveSessions()
+      .then(setActiveSessions)
+      .catch(() => showToast('Could not load active sessions', 'error'))
+      .finally(() => setSessionsLoading(false));
   }, []);
+
+  async function revokeSession(id: string, current: boolean) {
+    try {
+      await revokeActiveSession(id);
+      if (current) {
+        sessionLogout().finally(() => router.push('/auth/login'));
+        return;
+      }
+      setActiveSessions((items) => items.filter((item) => item.id !== id));
+      showToast('Session revoked');
+    } catch (err: any) { showToast(err.message, 'error'); }
+  }
+
+  async function revokeOthers() {
+    try {
+      await revokeOtherSessions();
+      setActiveSessions((items) => items.filter((item) => item.current));
+      showToast('Other sessions revoked');
+    } catch (err: any) { showToast(err.message, 'error'); }
+  }
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -124,28 +153,23 @@ export default function UserSettingsPage() {
 
           {/* Session */}
           <Card>
-            <SectionLabel icon={<ClockIcon />} title="Active Session" />
-            {session ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted font-medium">Session progress</span>
-                  <span className={`font-black text-sm ${session.expired ? "text-danger" : session.pct > 80 ? "text-amber-400" : "text-success"}`}>
-                    {session.expired ? "Expired — please sign in again" : `${session.hrs}h ${session.mins}m remaining`}
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-surface/60 rounded-full overflow-hidden border border-border/20">
-                  <div className={`h-full rounded-full transition-all duration-500 ${session.expired ? "bg-danger" : session.pct > 80 ? "bg-amber-400" : "bg-success"}`} style={{ width: `${session.pct}%` }} />
-                </div>
-                {(session.expired || session.pct > 85) && (
-                  <div className={`flex items-center gap-2.5 p-3.5 rounded-xl text-xs font-bold ${session.expired ? "bg-danger/8 border border-danger/20 text-danger" : "bg-amber-500/8 border border-amber-500/20 text-amber-400"}`}>
-                    <AlertIcon className="w-4 h-4 shrink-0" />
-                    {session.expired ? "Your session has expired. Sign out and sign back in." : "Session expiring soon. You'll be signed out shortly."}
+            <div className="flex items-center justify-between mb-5">
+              <SectionLabel icon={<ClockIcon />} title="Active Sessions" inline />
+              {activeSessions.length > 1 && <button onClick={revokeOthers} className="text-xs font-bold text-danger hover:underline">Sign out other devices</button>}
+            </div>
+            {sessionsLoading ? <p className="text-sm text-muted">Loading sessions…</p> : activeSessions.length ? (
+              <div className="space-y-3">
+                {activeSessions.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-border/25 bg-surface/30 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground truncate">{item.user_agent || 'Unknown device'} {item.current && <span className="text-success">(current)</span>}</p>
+                      <p className="text-xs text-muted mt-1">{item.ip_address || 'Unknown IP'} · last used {fmt(new Date(item.last_used_at))}</p>
+                    </div>
+                    <button onClick={() => revokeSession(item.id, item.current)} className="shrink-0 text-xs font-bold text-danger hover:underline">Revoke</button>
                   </div>
-                )}
+                ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted/60">No session information available.</p>
-            )}
+            ) : <p className="text-sm text-muted/60">No active sessions found.</p>}
           </Card>
         </div>
 

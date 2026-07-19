@@ -3,8 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { adminApi, decodeJwt } from "@/lib/adminApi";
-import { storeAdminToken } from "@/lib/adminSession";
+import { adminApi, storeAdminUser } from "@/lib/adminApi";
 
 function friendlyError(msg: string): string {
   if (!msg) return "Something went wrong. Please try again.";
@@ -35,6 +34,11 @@ function LoginForm() {
   const [show, setShow]         = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSetup, setMfaSetup] = useState<{ secret: string; uri: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [useRecovery, setUseRecovery] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,17 +46,34 @@ function LoginForm() {
     setLoading(true);
     try {
       const res = await adminApi.login(email.trim().toLowerCase(), password);
-      const token = res?.data?.token ?? res?.token;
-      if (!token) throw new Error("No token received");
-      const payload = decodeJwt(token);
-      if (!payload || payload.role !== "admin") throw new Error("Access denied: this account does not have admin privileges");
-      storeAdminToken(token);
-      router.replace("/admin");
+      if (!res?.mfaRequired || !res?.mfaToken) throw new Error("Access denied: this account does not have admin privileges");
+      setMfaToken(res.mfaToken);
+      if (res.enrollmentRequired) {
+        setMfaSetup(await adminApi.beginMfaEnrollment(res.mfaToken));
+      }
     } catch (err: any) {
       setError(friendlyError(err.message || "Login failed."));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleMfaSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mfaToken) return;
+    setError(null); setLoading(true);
+    try {
+      const result = useRecovery
+        ? await adminApi.recoverMfa(mfaToken, mfaCode)
+        : await adminApi.verifyMfa(mfaToken, mfaCode);
+      storeAdminUser(result.user);
+      if (result.recoveryCodes?.length) {
+        setRecoveryCodes(result.recoveryCodes);
+        return;
+      }
+      router.replace('/admin');
+    } catch (err: any) { setError(friendlyError(err.message || 'MFA verification failed.')); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -112,7 +133,31 @@ function LoginForm() {
           {sessionExpired && !error && <SessionExpiredBanner />}
           {error && <ErrorBanner msg={error} />}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {recoveryCodes ? (
+            <div className="space-y-4" role="status">
+              <p className="font-black">Save your recovery codes</p>
+              <p className="text-sm text-muted">Each code works once. Store them offline; they will not be shown again.</p>
+              <pre className="rounded-xl border border-border p-4 text-xs whitespace-pre-wrap">{recoveryCodes.join('\n')}</pre>
+              <button className="w-full py-3 rounded-2xl bg-accent text-white font-black" onClick={() => router.replace('/admin')}>I have saved them</button>
+            </div>
+          ) : mfaToken ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-5">
+              {mfaSetup && <div className="rounded-xl border border-border p-4 text-sm space-y-2">
+                <p className="font-black">Set up an authenticator</p>
+                <p className="text-muted">Add this key to your authenticator app, then enter its six-digit code.</p>
+                <code className="block break-all select-all">{mfaSetup.secret}</code>
+              </div>}
+              <Field label={useRecovery ? "Recovery code" : "Authentication code"}><InputWrap icon={<ShieldIcon />}><input
+                inputMode={useRecovery ? "text" : "numeric"} autoComplete="one-time-code"
+                pattern={useRecovery ? "[A-Fa-f0-9]{12}" : "[0-9]{6}"} maxLength={useRecovery ? 12 : 6} required
+                value={mfaCode} onChange={e => setMfaCode((useRecovery ? e.target.value.replace(/[^A-Fa-f0-9]/g, '') : e.target.value.replace(/\D/g, '')).toUpperCase())}
+                className={INPUT_CLS} aria-label={useRecovery ? "Twelve-character recovery code" : "Six-digit authentication code"} /></InputWrap></Field>
+              <button type="submit" disabled={loading || mfaCode.length !== (useRecovery ? 12 : 6)} className="w-full py-3.5 rounded-2xl bg-accent disabled:opacity-40 text-white font-black">Verify MFA</button>
+              {!mfaSetup && <button type="button" className="w-full text-xs text-muted underline" onClick={() => { setUseRecovery(v => !v); setMfaCode(''); }}>
+                {useRecovery ? 'Use authenticator code' : 'Use a recovery code'}
+              </button>}
+            </form>
+          ) : <form onSubmit={handleSubmit} className="space-y-5">
             <Field label="Email">
               <InputWrap icon={<EmailIcon />}>
                 <input
@@ -145,12 +190,10 @@ function LoginForm() {
             >
               {loading ? <Spinner text="Authenticating…" /> : <>Authorize Access <ArrowIcon /></>}
             </button>
-          </form>
+          </form>}
 
           <div className="mt-8 pt-6 border-t border-border/30 flex flex-col gap-3 items-center">
-            <Link href="/admin/register" className="text-[11px] text-muted hover:text-foreground font-bold uppercase tracking-widest transition-colors">
-              Create admin account
-            </Link>
+            <p className="text-[11px] text-muted font-bold uppercase tracking-widest">Administrator accounts require a one-time invitation</p>
             <Link href="/" className="text-[11px] text-muted/50 hover:text-muted font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 group">
               <svg className="w-3 h-3 transition-transform group-hover:-translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
               Return to public site

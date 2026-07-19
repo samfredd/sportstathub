@@ -8,10 +8,18 @@ POST result to callback_url with exponential backoff retry.
 
 from __future__ import annotations
 
-import structlog
+import hashlib
+import hmac
+import json
+import time
+import uuid
+from urllib.parse import urlsplit
+
 import httpx
+import structlog
 
 from app.config import get_settings
+from app.core.callback_security import validate_callback_url
 
 logger = structlog.get_logger()
 
@@ -34,7 +42,12 @@ class NotifierWorker:
         Retries with exponential backoff on failure.
         Returns True if delivered, False if all attempts failed.
         """
+        delivery_id = str(uuid.uuid4())
+        timestamp = str(int(time.time()))
         payload = {
+            "delivery_id": delivery_id,
+            "event_type": "translation.completed",
+            "timestamp": timestamp,
             "job_id": job_id,
             "status": "completed",
             "result": result,
@@ -42,20 +55,32 @@ class NotifierWorker:
 
         max_retries = self._settings.webhook_max_retries
         timeout = self._settings.webhook_timeout_seconds
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        signature = hmac.new(
+            self._settings.webhook_signing_secret.encode(), body, hashlib.sha256
+        ).hexdigest()
 
         for attempt in range(max_retries):
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                # Resolve and revalidate on every attempt to limit DNS rebinding.
+                callback_host, _ = await validate_callback_url(callback_url)
+                async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
                     response = await client.post(
                         callback_url,
-                        json=payload,
-                        headers={"Content-Type": "application/json"},
+                        content=body,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-OddSwitch-Delivery": delivery_id,
+                            "X-OddSwitch-Timestamp": timestamp,
+                            "X-OddSwitch-Event": "translation.completed",
+                            "X-OddSwitch-Signature": f"sha256={signature}",
+                        },
                     )
                     if response.status_code < 400:
                         logger.info(
                             "webhook_delivered",
                             job_id=job_id,
-                            url=callback_url,
+                            host=callback_host,
                             status=response.status_code,
                             attempt=attempt + 1,
                         )
@@ -64,7 +89,7 @@ class NotifierWorker:
                     logger.warning(
                         "webhook_rejected",
                         job_id=job_id,
-                        url=callback_url,
+                        host=callback_host,
                         status=response.status_code,
                         attempt=attempt + 1,
                     )
@@ -73,7 +98,7 @@ class NotifierWorker:
                 logger.warning(
                     "webhook_failed",
                     job_id=job_id,
-                    url=callback_url,
+                    host=urlsplit(callback_url).hostname,
                     error=str(exc),
                     attempt=attempt + 1,
                 )
@@ -86,7 +111,7 @@ class NotifierWorker:
         logger.error(
             "webhook_exhausted",
             job_id=job_id,
-            url=callback_url,
+            host=urlsplit(callback_url).hostname,
             max_retries=max_retries,
         )
         return False

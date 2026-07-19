@@ -36,7 +36,7 @@ export function isSubscriptionActive(subscription?: AccessUser | null, requiredP
   const status = subscription.subscription_status ?? subscription.status ?? null;
   const expiresAt = subscription.subscription_expires_at ?? subscription.expires_at ?? null;
 
-  if (String(status ?? '').toLowerCase() !== 'active') return false;
+  if (!['active', 'grace'].includes(String(status ?? '').toLowerCase())) return false;
   if (planRank(plan) < planRank(requiredPlan)) return false;
   if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return false;
 

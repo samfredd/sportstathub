@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Inter, Archivo } from "next/font/google";
+import { connection } from "next/server";
 import SessionSync from "@/components/SessionSync";
 
 const inter = Inter({
@@ -22,24 +23,12 @@ export const metadata = {
   description: "Real-time football stats, scores, booking codes, and AI-powered predictions.",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  // Nonce-based CSP requires request-time rendering so Next can attach the
+  // proxy-generated nonce to framework and page scripts.
+  await connection();
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${archivo.variable}`}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
-      </head>
       <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
         <SessionSync />
         <a href="#main-content" className="skip-link">Skip to content</a>

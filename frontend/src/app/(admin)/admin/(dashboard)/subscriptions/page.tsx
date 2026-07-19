@@ -18,16 +18,17 @@ type Plan = {
   is_active: boolean;
   is_popular: boolean;
   sort_order: number;
+  grace_period_days:number;
   subscriber_count: number;
 };
 
 const LIMIT = 20;
-const SUB_STATUSES = ["active", "cancelled", "expired"];
+const SUB_STATUSES = ["active", "grace", "cancelled", "expired"];
 const EMPTY_SUB = { userId: "", plan: "pro", status: "active", expiresAt: "", notes: "" };
 const EMPTY_PLAN: Omit<Plan, "id" | "subscriber_count" | "created_at" | "updated_at"> = {
   slug: "", display_name: "", description: "",
   price_monthly: 0, price_yearly: 0, currency: "USD",
-  features: [], limits: {}, is_active: true, is_popular: false, sort_order: 0,
+  features: [], limits: {}, is_active: true, is_popular: false, sort_order: 0,grace_period_days:0,
 };
 
 function toApiDateTime(v: string) { return v ? new Date(v).toISOString() : undefined; }
@@ -113,6 +114,7 @@ function PackagesTab({ showToast }: { showToast: (m: string, t?: string) => void
       is_active: plan.is_active,
       is_popular: plan.is_popular,
       sort_order: plan.sort_order,
+      grace_period_days:plan.grace_period_days,
     });
     setFeaturesText((plan.features ?? []).join("\n"));
   }
@@ -137,6 +139,7 @@ function PackagesTab({ showToast }: { showToast: (m: string, t?: string) => void
       isActive: planForm.is_active,
       isPopular: planForm.is_popular,
       sortOrder: Number(planForm.sort_order),
+      gracePeriodDays:Number(planForm.grace_period_days),
     };
   }
 
@@ -406,6 +409,10 @@ function PlanForm({ form, setForm, featuresText, setFeaturesText, onSubmit, onCa
         <div>
           <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Sort Order</label>
           <input type="number" value={form.sort_order} onChange={(e) => setField("sort_order", parseInt(e.target.value))} className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50 transition-all" />
+        </div>
+        <div>
+          <label className="block text-xs font-black text-muted uppercase tracking-wider mb-1.5">Grace Days</label>
+          <input type="number" min={0} max={30} value={form.grace_period_days} onChange={(e) => setField("grace_period_days", Number(e.target.value))} className="w-full glass px-3 py-2.5 rounded-xl text-sm text-foreground border border-border/40 focus:outline-none focus:border-accent/50" />
         </div>
       </div>
 

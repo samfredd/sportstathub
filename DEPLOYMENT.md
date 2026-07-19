@@ -42,7 +42,7 @@ Edit `.env` and fill in every `CHANGE_ME` value:
 | `DB_PASSWORD` | Strong random password for Postgres |
 | `REDIS_PASSWORD` | Strong random password for Redis |
 | `SECRET_KEY` | JWT signing secret (`openssl rand -hex 32`) |
-| `ADMIN_INVITE_KEY` | Admin registration token |
+| `MFA_ENCRYPTION_KEY` | Independent random key used to encrypt administrator TOTP secrets |
 | `FOOTBALL_API_KEY` | API-Football key |
 | `NVIDIA_API_KEY` | NVIDIA AI API key (get one at https://build.nvidia.com) |
 | `NVIDIA_MODEL` | Model to use (default: `nvidia/nemotron-3-super-120b-a12b`) |

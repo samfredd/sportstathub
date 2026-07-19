@@ -11,15 +11,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
 from app.schemas.canonical import CanonicalLeg, CanonicalSlip
 from app.schemas.enums import TranslationStatus
 from app.workers.confidence import ConfidenceScorer
 from app.workers.matcher import EventMatch
 from app.workers.normalizer import MARKET_NORMALIZATIONS, NormalizerWorker
 from app.workers.translator import MarketTranslation
-
 
 # ── Market Normalization ─────────────────────────────────────────────────────
 

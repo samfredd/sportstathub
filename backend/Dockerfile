@@ -22,6 +22,8 @@ RUN addgroup --system --gid 1001 nodejs \
 # Only production dependencies
 COPY --from=builder /app/package*.json ./
 RUN npm ci --omit=dev
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Compiled output
 COPY --from=builder /app/dist ./dist
