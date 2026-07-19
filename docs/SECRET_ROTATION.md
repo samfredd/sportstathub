@@ -10,4 +10,4 @@ Use this checklist after any suspected disclosure and on the organization’s re
 6. Review audit logs for unauthorized use, record the incident timeline, and notify affected users when required.
 7. Run Gitleaks over the full Git history. Removing a value from the current tree does not make a previously committed credential safe.
 
-Credentials covered: database, Redis, JWT signing, MFA encryption, Resend API, Paystack, API-Football/API-Sports, Odds API, NVIDIA, Google OAuth, OddSwitch, container registry, and deployment SSH keys.
+Credentials covered: database, Redis, JWT signing, MFA encryption, Resend API, Paystack, API-Football/API-Sports, Odds API, NVIDIA, Google OAuth, OddSwitch, container registry, and deployment SSH credentials.

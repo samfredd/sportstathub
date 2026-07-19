@@ -469,7 +469,7 @@ jobs:
       packages: read
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         env:
           APP_DIR: ${{ secrets.PRODUCTION_APP_DIR || '/var/www/project' }}
           REPO: ${{ github.repository }}
@@ -518,8 +518,9 @@ jobs:
           APP_ODDSWITCH_WEBHOOK_SIGNING_SECRET: ${{ secrets.ODDSWITCH_WEBHOOK_SIGNING_SECRET }}
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
+          port: ${{ secrets.PRODUCTION_SSH_PORT || '22' }}
           username: ${{ secrets.PRODUCTION_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          password: ${{ secrets.PRODUCTION_PASSWORD }}
           fingerprint: ${{ secrets.PRODUCTION_HOST_FINGERPRINT }}
           # Single unbroken line — deliberately NOT a YAML folded block (`>-`).
           # Folded scalars join line breaks with a space, so a multi-line list here

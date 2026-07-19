@@ -2,7 +2,7 @@
 
 ## Required configuration
 
-Before deployment, provide unique production values for database and Redis passwords, `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `METRICS_TOKEN`, `RESEND_API_KEY`, deployment SSH key/known-host fingerprint, domain/ACME email, and every enabled provider. Paystack requires both keys; OddSwitch callbacks require `ODDSWITCH_WEBHOOK_SIGNING_SECRET`.
+Before deployment, provide unique production values for database and Redis passwords, `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `METRICS_TOKEN`, `RESEND_API_KEY`, deployment SSH password/known-host fingerprint, domain/ACME email, and every enabled provider. Paystack requires both keys; OddSwitch callbacks require `ODDSWITCH_WEBHOOK_SIGNING_SECRET`.
 
 Rotate any credential that has ever appeared in Git history. Merely replacing an example value does not revoke it.
 
@@ -16,7 +16,7 @@ Rotate any credential that has ever appeared in Git history. Merely replacing an
 6. Smoke-test login/refresh/logout, admin MFA, public search, a premium access denial, and a sandbox Paystack verification. Verify payment and OddSwitch workers are consuming their queues.
 7. Watch error rate, payment reconciliation failures, webhook failures, AI quota pressure, SSE connections, and OddSwitch job failures during the rollout window.
 
-The current GitHub workflow authenticates with a restricted SSH deployment key and validates the server fingerprint. The obsolete password-based environment-copy workflow was removed.
+The current GitHub workflow authenticates with `PRODUCTION_USER` and `PRODUCTION_PASSWORD`. It connects to `PRODUCTION_HOST` on `PRODUCTION_SSH_PORT` (port 22 by default) and validates `PRODUCTION_HOST_FINGERPRINT` when that secret is configured. The old environment-copy deployment was removed; secrets are supplied to the immutable-image deployment at runtime.
 
 ## Bootstrap an administrator
 
