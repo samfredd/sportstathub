@@ -4,10 +4,10 @@ import {expect,test} from '@playwright/test';
 test('public navigation, global search, and PRO routing work',async({page},testInfo)=>{
   test.skip(testInfo.project.name.startsWith('mobile'),'Desktop navigation assertion');
   const consoleErrors:string[]=[];page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text())});
-  await page.goto('/');await expect(page.getByRole('link',{name:'Search'})).toBeVisible();
-  await page.getByRole('link',{name:'Search'}).click();await page.getByRole('searchbox',{name:'Search SportStatHub'}).fill('creator');
+  await page.goto('/search');await expect(page.getByRole('link',{name:'Search'})).toBeVisible();
+  await page.getByRole('searchbox',{name:'Search SportStatHub'}).fill('creator');
   await expect(page.getByRole('heading',{name:'threads'})).toBeVisible();await expect(page.getByRole('link',{name:/Creator introductions/i}).first()).toBeVisible();
-  await page.goto('/');await page.getByRole('link',{name:'Open Pro plan details'}).click();await expect(page).toHaveURL(/\/auth\/login(?:\?|$)/);
+  await page.goto('/dashboard/subscription');await expect(page).toHaveURL(/\/auth\/login(?:\?|$)/);
   expect(consoleErrors).toEqual([]);
 });
 

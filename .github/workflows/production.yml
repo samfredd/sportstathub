@@ -235,7 +235,10 @@ jobs:
           NODE_ENV: test
         run: npm run migrate --prefix backend && npm run build --prefix backend
       - name: Build frontend
-        run: npm run build --prefix frontend
+        run: |
+          npm run build --prefix frontend
+          cp -R frontend/public frontend/.next/standalone/public
+          cp -R frontend/.next/static frontend/.next/standalone/.next/static
       - name: Install Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
@@ -250,8 +253,8 @@ jobs:
           CI: "true"
         run: |
           node backend/dist/server.js &
-          npm run start --prefix frontend &
-          for i in $(seq 1 30); do curl -sf http://localhost:4000/health/ready && curl -sf http://localhost:3000 && break || sleep 1; done
+          HOSTNAME=0.0.0.0 PORT=3000 node frontend/.next/standalone/server.js &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:4000/health/ready && curl -sf -o /dev/null http://localhost:3000 && break || sleep 1; done
           npm run test:e2e --prefix frontend
 
   docker:
