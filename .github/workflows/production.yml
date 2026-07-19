@@ -617,6 +617,16 @@ jobs:
             export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
             export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
 
+            # Releases are immutable and can be pulled from GHCR again, so reclaim
+            # stopped containers, unused images, and builder cache before touching
+            # PostgreSQL. Never prune volumes: they contain PostgreSQL and Redis data.
+            # This must precede the DB readiness check so Postgres can recover after
+            # a host-level disk-full condition.
+            docker container prune -f
+            docker image prune -af
+            docker builder prune -af
+            docker system df
+
             docker network inspect web >/dev/null 2>&1 || docker network create web
 
             # Sync the Postgres user password to match DB_PASSWORD on every deploy.
@@ -626,6 +636,19 @@ jobs:
             # needs no password. Runs against the still-running db from the previous deploy.
             DB_CONTAINER="$(docker compose -f docker-compose.prod.yml ps -q db 2>/dev/null || true)"
             if [ -n "$DB_CONTAINER" ]; then
+              DB_READY=false
+              for attempt in $(seq 1 60); do
+                if docker exec "$DB_CONTAINER" pg_isready -U project -d postgres >/dev/null 2>&1; then
+                  DB_READY=true
+                  break
+                fi
+                sleep 2
+              done
+              if [ "$DB_READY" != "true" ]; then
+                echo "ERROR: PostgreSQL did not become ready after disk cleanup and recovery wait." >&2
+                docker logs --tail=120 "$DB_CONTAINER"
+                exit 1
+              fi
               if printf '%s\n' "SELECT format('ALTER ROLE project PASSWORD %L', :'db_password') \\gexec" | \
                    docker exec -i "$DB_CONTAINER" psql -U project -d postgres \
                      --set=db_password="$DB_PASSWORD" --set=ON_ERROR_STOP=1; then
@@ -642,14 +665,6 @@ jobs:
                 DEPLOY_SERVICES="$DEPLOY_SERVICES $service"
               fi
             done
-
-            # Releases are immutable and can be pulled from GHCR again, so reclaim
-            # stopped containers, unused images, and builder cache before pulling the
-            # next release. Never prune volumes: they contain PostgreSQL and Redis data.
-            docker container prune -f
-            docker image prune -af
-            docker builder prune -af
-            docker system df
 
             docker compose -f docker-compose.prod.yml pull $DEPLOY_SERVICES
             docker compose -f docker-compose.prod.yml up -d --remove-orphans $DEPLOY_SERVICES || {
