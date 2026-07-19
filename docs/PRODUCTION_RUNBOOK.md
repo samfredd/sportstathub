@@ -8,36 +8,34 @@ Rotate any credential that has ever appeared in Git history. Merely replacing an
 
 ## Deploy
 
-Steps 1–6 below are automated by `.github/workflows/production.yml`'s `deploy`
+Steps 1–5 below are automated by `.github/workflows/production.yml`'s `deploy`
 job on every push to `main` (or manual dispatch with `deploy: true`). This
 section documents what the workflow actually does, so an operator can reason
 about a run without re-reading the script.
 
-1. **Preflight**: the job refuses to run at all if `PRODUCTION_HOST_FINGERPRINT`
-   is unset — there is no "skip host-key verification" fallback.
-2. **Backup**: a `pg_dump` of the live database is taken and gzip-integrity
+1. **Backup**: a `pg_dump` of the live database is taken and gzip-integrity
    checked before anything else touches the database. An empty or corrupt
    backup aborts the deploy. Backups land in `$PRODUCTION_APP_DIR/backups/`
    on the host, named `pre-deploy-<UTC timestamp>-<commit SHA>.sql.gz`.
-3. **Migrations**: run once, in a dedicated one-off `docker compose run --rm
+2. **Migrations**: run once, in a dedicated one-off `docker compose run --rm
    backend node dist/migrate.js` container — never implicitly on every
    backend container boot (see `backend/docker-entrypoint.sh`). A migration
    failure aborts the deploy before any new container serves traffic; the
    previous release keeps running untouched.
-4. **Release**: images pinned to the exact Git commit SHA are pulled and
+3. **Release**: images pinned to the exact Git commit SHA are pulled and
    started (`docker compose up -d`). Never `latest` for a production release.
-5. **Health + smoke tests**: per-container Docker healthchecks are polled
+4. **Health + smoke tests**: per-container Docker healthchecks are polled
    first, then `deploy/smoke-test.sh` runs against the live domain —
    `/health/live`, `/health/ready` (DB + Redis), homepage, public
    leagues/live-matches endpoints, a non-destructive `/api/subscription-plans`
    read, a frontend static asset, and that `/auth/login` responds with a
    clean 4xx rather than hanging or 5xx-ing.
-6. **On failure**: any of steps 4–5 failing triggers an automatic rollback —
+5. **On failure**: any of steps 3–4 failing triggers an automatic rollback —
    the previous release's images (recorded in `.last_successful_tag` by the
    prior successful deploy) are redeployed. **The database is never
    auto-reverted** — an irreversible-migration auto-rollback can silently
    corrupt data. If the just-applied migration is genuinely incompatible with
-   the rolled-back image, restore the pre-deploy backup from step 2 manually
+   the rolled-back image, restore the pre-deploy backup from step 1 manually
    (see Rollback below) — this requires a human decision, not automation.
    Image/build-cache pruning only happens after a successful deploy, so a
    failed deploy always has the previous release's images available locally
@@ -50,7 +48,7 @@ Watch error rate, payment reconciliation failures, webhook failures, AI
 quota pressure, SSE connections, and OddSwitch job failures during the
 rollout window.
 
-The current GitHub workflow authenticates with `PRODUCTION_USER` and `PRODUCTION_PASSWORD`. It connects to `PRODUCTION_HOST` on `PRODUCTION_SSH_PORT` (port 22 by default) and requires `PRODUCTION_HOST_FINGERPRINT` — get it with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` and store the result as that secret. The old environment-copy deployment was removed; secrets are supplied to the immutable-image deployment at runtime.
+The current GitHub workflow authenticates with `PRODUCTION_USER` and `PRODUCTION_PASSWORD`. It connects to `PRODUCTION_HOST` on `PRODUCTION_SSH_PORT` (port 22 by default). `PRODUCTION_HOST_FINGERPRINT` is optional: when set, the SSH action verifies it; when unset, host-key verification is skipped rather than blocking the deploy. Get a fingerprint to set with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`. The old environment-copy deployment was removed; secrets are supplied to the immutable-image deployment at runtime.
 
 ## Bootstrap an administrator
 
@@ -117,11 +115,13 @@ directly on the production host, and re-verify after any host rebuild:
   in GitHub Secrets in the same change. Never log it — the deploy script
   never echoes `$APP_...PASSWORD`-shaped values, and any change to that
   script must preserve that.
-- **Verify the host fingerprint stays current.** If the host is ever rebuilt
-  or its SSH host key rotated, regenerate `PRODUCTION_HOST_FINGERPRINT`
-  (`ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`) and update the GitHub
-  secret before the next deploy — the preflight check in the workflow will
-  otherwise correctly refuse to deploy with a stale/missing fingerprint.
+- **Host fingerprint (optional).** `PRODUCTION_HOST_FINGERPRINT` is not
+  currently required by this workflow — if unset, the SSH action skips
+  host-key verification rather than blocking the deploy. If you do set it,
+  keep it current: regenerate with `ssh-keyscan -t ed25519 <host> |
+  ssh-keygen -lf -` and update the GitHub secret whenever the host is
+  rebuilt or its SSH host key rotates, since a stale value there would
+  actively reject a legitimate host.
 
 ## External/manual follow-up
 

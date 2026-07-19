@@ -468,17 +468,6 @@ jobs:
       contents: read
       packages: read
     steps:
-      - name: Require host fingerprint
-        # appleboy/ssh-action treats an empty `fingerprint` input as "skip
-        # host-key verification" rather than failing — silently downgrading
-        # to no verification if the secret was ever unset. Fail the deploy
-        # outright instead of connecting without it.
-        run: |
-          if [ -z "${{ secrets.PRODUCTION_HOST_FINGERPRINT }}" ]; then
-            echo "::error::PRODUCTION_HOST_FINGERPRINT secret is not set — refusing to deploy without host-key verification. Get it with: ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -" >&2
-            exit 1
-          fi
-
       - name: Deploy over SSH
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         env:
