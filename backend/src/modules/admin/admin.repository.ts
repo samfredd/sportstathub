@@ -293,13 +293,14 @@ export function createAdminRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, features, limits, isActive, isPopular, sortOrder, gracePeriodDays }) {
+  async function createPlan({ slug, displayName, description, priceMonthly, priceYearly, priceMonthlyMinor, priceYearlyMinor, features, limits, isActive, isPopular, sortOrder, gracePeriodDays }) {
     const { rows } = await db.query(
       `INSERT INTO subscription_plans
-         (slug, display_name, description, price_monthly, price_yearly, currency, features, limits, is_active, is_popular, sort_order,grace_period_days)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         (slug, display_name, description, price_monthly, price_yearly, price_monthly_minor, price_yearly_minor, currency, features, limits, is_active, is_popular, sort_order,grace_period_days)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
       [slug, displayName, description ?? null, priceMonthly ?? 0, priceYearly ?? 0,
+       priceMonthlyMinor ?? 0, priceYearlyMinor ?? 0,
        'USD', JSON.stringify(features ?? []), JSON.stringify(limits ?? {}),
        isActive ?? true, isPopular ?? false, sortOrder ?? 0,gracePeriodDays ?? 0]
     );
@@ -313,6 +314,7 @@ export function createAdminRepository(db) {
     const map: Record<string, string> = {
       displayName: 'display_name', description: 'description',
       priceMonthly: 'price_monthly', priceYearly: 'price_yearly',
+      priceMonthlyMinor: 'price_monthly_minor', priceYearlyMinor: 'price_yearly_minor',
       isActive: 'is_active', isPopular: 'is_popular', sortOrder: 'sort_order',gracePeriodDays:'grace_period_days',
     };
     for (const [key, col] of Object.entries(map)) {

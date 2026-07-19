@@ -9,6 +9,8 @@ const proPlan = {
   display_name: 'Pro',
   price_monthly: '9.99',
   price_yearly: '99.99',
+  price_monthly_minor: 999,
+  price_yearly_minor: 9999,
   currency: 'USD',
   features: [],
   limits: {},
@@ -132,7 +134,22 @@ test('initializeCheckout sends USD cents to Paystack and stores a pending paymen
   assert.equal(paystack.calls[0].payload.callbackUrl, 'https://sportstathub.com/dashboard/subscription');
   assert.equal(repo.calls[1].method, 'createPaymentTransaction');
   assert.equal(repo.calls[1].payload.status, 'pending');
-  assert.equal(repo.calls[1].payload.amount, 9.99);
+  assert.equal(repo.calls[1].payload.amountMinor, 999);
+});
+
+test('initializeCheckout derives minor units from the decimal price when *_minor is not yet backfilled', async () => {
+  const repo = makeRepo({
+    async findActivePlanBySlug(slug: string) {
+      return slug === 'pro' ? { ...proPlan, price_monthly_minor: null, price_yearly_minor: null } : null;
+    },
+  });
+  const paystack = makePaystack();
+  const service = createBillingService({ repo, paystack });
+
+  const checkout = await service.initializeCheckout({ id: 7, email: 'fan@example.com' }, { plan: 'pro', interval: 'monthly' });
+
+  assert.equal(checkout.amount, 9.99);
+  assert.equal(paystack.calls[0].payload.amount, 999);
 });
 
 test('verifyPayment activates subscription after a successful Paystack verification', async () => {

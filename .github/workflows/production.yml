@@ -468,6 +468,17 @@ jobs:
       contents: read
       packages: read
     steps:
+      - name: Require host fingerprint
+        # appleboy/ssh-action treats an empty `fingerprint` input as "skip
+        # host-key verification" rather than failing — silently downgrading
+        # to no verification if the secret was ever unset. Fail the deploy
+        # outright instead of connecting without it.
+        run: |
+          if [ -z "${{ secrets.PRODUCTION_HOST_FINGERPRINT }}" ]; then
+            echo "::error::PRODUCTION_HOST_FINGERPRINT secret is not set — refusing to deploy without host-key verification. Get it with: ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -" >&2
+            exit 1
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         env:
@@ -617,14 +628,14 @@ jobs:
             export DOMAIN="${DEPLOY_DOMAIN:-${DOMAIN:-}}"
             export ACME_EMAIL="${DEPLOY_ACME_EMAIL:-${ACME_EMAIL:-}}"
 
-            # Releases are immutable and can be pulled from GHCR again, so reclaim
-            # stopped containers, unused images, and builder cache before touching
-            # PostgreSQL. Never prune volumes: they contain PostgreSQL and Redis data.
-            # This must precede the DB readiness check so Postgres can recover after
-            # a host-level disk-full condition.
+            # Reclaim stopped containers before touching PostgreSQL so Postgres can
+            # recover after a host-level disk-full condition — this must precede the
+            # DB readiness check below. Image/builder-cache pruning is deferred to
+            # the very end, after smoke tests confirm the new release is healthy:
+            # pruning here would remove the previous release's images before we know
+            # whether we'll need them for an immediate rollback. Never prune volumes:
+            # they contain PostgreSQL and Redis data.
             docker container prune -f
-            docker image prune -af
-            docker builder prune -af
             docker system df
 
             docker network inspect web >/dev/null 2>&1 || docker network create web
@@ -657,6 +668,32 @@ jobs:
                 echo "ERROR: failed to sync Postgres password — aborting before downstream auth failures." >&2
                 exit 1
               fi
+
+              # Record the currently-running release so a failed smoke test can roll
+              # back to it. Written by this same script at the end of a successful
+              # deploy; absent on a first-ever deploy (nothing to roll back to yet).
+              PREVIOUS_TAG=""
+              if [ -f .last_successful_tag ]; then
+                PREVIOUS_TAG="$(cat .last_successful_tag)"
+              fi
+
+              # Backup before migrations run. Non-empty and gzip-integrity checked —
+              # an empty or corrupt backup must abort the deploy, not be trusted
+              # as a safety net for the migration about to run.
+              BACKUP_DIR="$APP_DIR/backups"
+              mkdir -p "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG}.sql.gz"
+              if docker exec "$DB_CONTAINER" pg_dump -U project -d me | gzip > "$BACKUP_FILE" \
+                 && [ -s "$BACKUP_FILE" ] \
+                 && gzip -t "$BACKUP_FILE"; then
+                echo "Pre-deploy backup verified: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+              else
+                rm -f "$BACKUP_FILE"
+                echo "ERROR: pre-deploy backup failed, was empty, or failed integrity check — aborting before migrations." >&2
+                exit 1
+              fi
+            else
+              PREVIOUS_TAG=""
             fi
             AVAILABLE_SERVICES="$(docker compose -f docker-compose.prod.yml config --services)"
             DEPLOY_SERVICES=""
@@ -666,11 +703,46 @@ jobs:
               fi
             done
 
+            # Restores the last known-good release's images on a failed deploy. This
+            # NEVER touches the database — migrations already applied above are not
+            # reverted automatically (an irreversible-migration auto-rollback can
+            # silently corrupt data). If a migration is genuinely incompatible with
+            # the rolled-back image, restore the pre-deploy backup taken above
+            # manually; see docs/PRODUCTION_RUNBOOK.md.
+            rollback_and_exit() {
+              echo "::error::$1" >&2
+              if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$IMAGE_TAG" ]; then
+                echo "Rolling back images to previous release $PREVIOUS_TAG (database is NOT reverted) ..."
+                if IMAGE_TAG="$PREVIOUS_TAG" docker compose -f docker-compose.prod.yml pull $DEPLOY_SERVICES \
+                   && IMAGE_TAG="$PREVIOUS_TAG" docker compose -f docker-compose.prod.yml up -d --remove-orphans $DEPLOY_SERVICES; then
+                  echo "Rolled back to $PREVIOUS_TAG. This deploy is FAILED — investigate before retrying."
+                else
+                  echo "::error::Rollback to $PREVIOUS_TAG also failed — production may be down, manual intervention required." >&2
+                fi
+              else
+                echo "::error::No previous successful release recorded — cannot auto-rollback. Manual intervention required." >&2
+              fi
+              exit 1
+            }
+
             docker compose -f docker-compose.prod.yml pull $DEPLOY_SERVICES
+
+            # Migrations run once, in a dedicated one-off container, before the new
+            # release starts — never implicitly on every backend container boot
+            # (see backend/docker-entrypoint.sh). A migration failure aborts the
+            # deploy before any new container serves traffic; the previous release
+            # (and its containers) are still running at this point untouched.
+            if printf '%s\n' "$DEPLOY_SERVICES" | grep -qw backend; then
+              docker compose -f docker-compose.prod.yml run --rm backend node dist/migrate.js || {
+                echo "::error::Migration failed — the previous release is still running. Restore from the pre-deploy backup if the database was left in a partial state." >&2
+                exit 1
+              }
+            fi
+
             docker compose -f docker-compose.prod.yml up -d --remove-orphans $DEPLOY_SERVICES || {
               docker compose -f docker-compose.prod.yml ps
               docker compose -f docker-compose.prod.yml logs --tail=120 $DEPLOY_SERVICES
-              exit 1
+              rollback_and_exit "docker compose up failed"
             }
 
             docker compose -f docker-compose.prod.yml ps
@@ -687,6 +759,28 @@ jobs:
               done
               if [ "$status" != "healthy" ] && [ "$status" != "running" ]; then
                 docker compose -f docker-compose.prod.yml logs --tail=80 "$service"
-                exit 1
+                rollback_and_exit "container $service did not become healthy"
               fi
             done
+
+            # Business-level smoke tests — fetched fresh for this commit, same
+            # no-source-on-server pattern as the compose file above.
+            curl -fsSL \
+              -H "Authorization: Bearer $GHCR_TOKEN" \
+              -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/$REPO/contents/deploy/smoke-test.sh?ref=$IMAGE_TAG" \
+              -o smoke-test.sh
+            chmod +x smoke-test.sh
+            if ! ./smoke-test.sh "https://${DOMAIN}"; then
+              rollback_and_exit "business smoke tests failed"
+            fi
+            rm -f smoke-test.sh
+
+            # Only now that the new release is verified healthy: record it as the
+            # rollback target for the next deploy, and reclaim images/build cache —
+            # deferred this late so a failed deploy above always had the previous
+            # release's images available locally to roll back to without a re-pull.
+            echo "$IMAGE_TAG" > .last_successful_tag
+            docker image prune -af
+            docker builder prune -af
+            docker system df

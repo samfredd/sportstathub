@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import { isSubscriptionActive } from '../helpers/access-control.helpers.js';
+import { createStepUpChallenge } from '../modules/auth/step-up.service.js';
 
 async function authenticatePlugin(fastify) {
   async function loadCurrentUser(id: number, sessionId: string, sessionVersion: number) {
@@ -81,7 +82,11 @@ async function authenticatePlugin(fastify) {
     if (reply.sent) return;
     const authTime = Number(request.user?.auth_time || 0);
     if (!authTime || Date.now() / 1000 - authTime > 10 * 60) {
-      return reply.status(401).send({ status: 'error', error: 'Recent MFA authentication is required' });
+      // Machine-readable so the admin frontend can show a step-up modal and
+      // retry the original request, instead of treating this the same as an
+      // expired session and forcing a full logout.
+      const challengeId = await createStepUpChallenge(fastify.redis, request.user.id);
+      return reply.status(401).send({ status: 'error', code: 'ADMIN_STEP_UP_REQUIRED', challengeId });
     }
   });
 

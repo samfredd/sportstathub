@@ -17,7 +17,7 @@ test('billing repository persists cancellation, receipt, refund, revocation, and
     const cancelled=await repo.cancelAtPeriodEnd(userId,'integration test');assert.equal(cancelled.cancel_at_period_end,true);assert.equal(cancelled.status,'active');
     const restored=await repo.restoreSubscription(userId);assert.equal(restored.cancel_at_period_end,false);
     const reference=`integration_${suffix}`;
-    const payment=await repo.createPaymentTransaction({userId,provider:'paystack',reference,plan:'pro',billingInterval:'monthly',amount:9.99,currency:'USD',status:'processing',providerPayload:{}});
+    const payment=await repo.createPaymentTransaction({userId,provider:'paystack',reference,plan:'pro',billingInterval:'monthly',amountMinor:999,currency:'USD',status:'processing',providerPayload:{}});
     const settled=await repo.settleVerifiedPayment(reference,{raw:{status:true},paidAt:new Date().toISOString()});assert.equal(settled.payment.status,'success');
     const {rows:receipts}=await pool.query(`SELECT * FROM payment_receipts WHERE payment_id=$1`,[payment.id]);assert.equal(receipts.length,1);
     const refunded=await repo.applyAdversePaymentEvent(reference,'refund.processed',{data:{id:`refund_${suffix}`,amount:999,status:'processed'}});assert.equal(refunded.status,'refunded');

@@ -8,7 +8,7 @@ import {
   subscriptionsQuerySchema, subscriptionParamSchema,
   createSubscriptionSchema, updateSubscriptionSchema,
   createPlanSchema, updatePlanSchema,
-  changePasswordSchema,
+  changePasswordSchema, bulkUserSchema,
 } from './admin.schemas.js';
 import { createPredictionSchema } from '../community/community.schemas.js';
 
@@ -81,17 +81,17 @@ async function adminRoutes(fastify) {
   }, ctrl.getSubscriptions);
 
   fastify.post('/api/admin/subscriptions', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { body: createSubscriptionSchema },
   }, ctrl.createSubscription);
 
   fastify.put('/api/admin/subscriptions/:id', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam, body: updateSubscriptionSchema },
   }, ctrl.updateSubscription);
 
   fastify.delete('/api/admin/subscriptions/:id', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam },
   }, ctrl.deleteSubscription);
 
@@ -102,7 +102,7 @@ async function adminRoutes(fastify) {
     schema: { body: { type: 'object', properties: { username: { type: 'string', minLength: 2, maxLength: 32 }, email: { type: 'string', format: 'email' } } } },
   }, ctrl.updateProfile);
   fastify.put('/api/admin/me/password', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { body: changePasswordSchema },
   }, ctrl.changePassword);
   const activityQuery = { type: 'object', properties: { page: { type: 'integer', default: 1 }, limit: { type: 'integer', default: 20, maximum: 50 } } };
@@ -110,22 +110,22 @@ async function adminRoutes(fastify) {
 
   // ─── Subscription Plans ───────────────────────────────────
   fastify.get('/api/admin/subscription-plans', guard, ctrl.getPlans);
-  fastify.post('/api/admin/subscription-plans', { ...guard, schema: { body: createPlanSchema } }, ctrl.createPlan);
+  fastify.post('/api/admin/subscription-plans', { ...sensitiveGuard, schema: { body: createPlanSchema } }, ctrl.createPlan);
   fastify.get('/api/admin/subscription-plans/:id', { ...guard, schema: { params: idParam } }, ctrl.getPlan);
-  fastify.put('/api/admin/subscription-plans/:id', { ...guard, schema: { params: idParam, body: updatePlanSchema } }, ctrl.updatePlan);
-  fastify.delete('/api/admin/subscription-plans/:id', { ...guard, schema: { params: idParam } }, ctrl.deletePlan);
+  fastify.put('/api/admin/subscription-plans/:id', { ...sensitiveGuard, schema: { params: idParam, body: updatePlanSchema } }, ctrl.updatePlan);
+  fastify.delete('/api/admin/subscription-plans/:id', { ...sensitiveGuard, schema: { params: idParam } }, ctrl.deletePlan);
 
   // ─── Predictions ──────────────────────────────────────────
   const predictionsQuery = { type: 'object', properties: { page: { type: 'integer', default: 1 }, limit: { type: 'integer', default: 20 }, search: { type: 'string', default: '' }, status: { type: 'string', default: '' } } };
   fastify.get('/api/admin/predictions', { ...guard, schema: { querystring: predictionsQuery } }, ctrl.getPredictions);
   fastify.put('/api/admin/predictions/:id', {
-    ...guard,
+    ...sensitiveGuard,
     schema: {
       params: idParam,
       body: {
         type: 'object',
         properties: {
-          status: { type: 'string' },
+          status: { type: 'string', enum: ['open', 'won', 'lost', 'void'] },
           isPremium: { type: 'boolean' },
         },
         additionalProperties: false,
@@ -154,7 +154,7 @@ async function adminRoutes(fastify) {
       },
     },
   }, ctrl.createAdminPrediction);
-  fastify.delete('/api/admin/predictions/:id', { ...guard, schema: { params: idParam } }, ctrl.deletePrediction);
+  fastify.delete('/api/admin/predictions/:id', { ...sensitiveGuard, schema: { params: idParam } }, ctrl.deletePrediction);
 
   // Manually trigger the settlement sweep (grades open predictions tied to a
   // finished fixture). The scheduler also runs this hourly.
@@ -182,7 +182,7 @@ async function adminRoutes(fastify) {
   };
   fastify.get('/api/admin/feature-flags', guard, ctrl.getFeatureFlags);
   fastify.patch('/api/admin/feature-flags/:key', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: flagKeyParam, body: updateFlagSchema },
   }, async (request: any, reply) => {
     const updated = await svc.updateFeatureFlag(request.user.id, request.params.key, request.body);
@@ -221,7 +221,7 @@ async function adminRoutes(fastify) {
     }, additionalProperties: false } },
   }, ctrl.getCreatorApplications);
   fastify.post('/api/admin/creator-applications/:id/review', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam, body: { type: 'object', required: ['decision'], properties: {
       decision: { type: 'string', enum: ['approve','reject'] },
       notes: { type: 'string', maxLength: 2000 },
@@ -246,18 +246,8 @@ async function adminRoutes(fastify) {
   }, ctrl.getFilteredAuditLogs);
 
   // ─── Bulk User Actions ────────────────────────────────────
-  const bulkUserSchema = {
-    type: 'object',
-    required: ['ids', 'action'],
-    properties: {
-      ids:     { type: 'array', items: { type: 'integer' }, minItems: 1, maxItems: 100 },
-      action:  { type: 'string', enum: ['delete', 'suspend', 'unsuspend', 'change_role'] },
-      payload: { type: 'object' },
-    },
-    additionalProperties: false,
-  };
   fastify.post('/api/admin/users/bulk', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { body: bulkUserSchema },
   }, ctrl.bulkUserAction);
 
@@ -270,11 +260,12 @@ async function adminRoutes(fastify) {
     required: ['status'],
     properties: {
       status: { type: 'string', enum: ['active', 'suspended', 'banned'] },
+      reason: { type: 'string', maxLength: 500 },
     },
     additionalProperties: false,
   };
   fastify.patch('/api/admin/users/:id/status', {
-    ...guard,
+    ...sensitiveGuard,
     schema: { params: idParam, body: userStatusSchema },
   }, ctrl.updateUserStatus);
 

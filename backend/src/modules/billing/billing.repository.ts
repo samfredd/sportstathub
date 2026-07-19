@@ -19,11 +19,11 @@ export function createBillingRepository(db) {
     return rows[0] ?? null;
   }
 
-  async function createPaymentTransaction({ userId, provider, reference, plan, billingInterval, amount, currency, status, authorizationUrl = null, accessCode = null, providerPayload }) {
+  async function createPaymentTransaction({ userId, provider, reference, plan, billingInterval, amountMinor, currency, status, authorizationUrl = null, accessCode = null, providerPayload }) {
     const { rows } = await db.query(
       `INSERT INTO payment_transactions
-         (user_id, provider, reference, plan, billing_interval, amount, currency, status, authorization_url, access_code, provider_payload)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+         (user_id, provider, reference, plan, billing_interval, amount, amount_minor, currency, status, authorization_url, access_code, provider_payload)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
        RETURNING *`,
       [
         userId,
@@ -31,7 +31,8 @@ export function createBillingRepository(db) {
         reference,
         plan,
         billingInterval,
-        amount,
+        amountMinor / 100,
+        amountMinor,
         currency,
         status,
         authorizationUrl ?? null,
@@ -259,22 +260,28 @@ export function createBillingRepository(db) {
       const payment = rows[0];
       if (!payment) return null;
       const isRefund = eventType.startsWith('refund.');
-      const rawAmount = Number(payload?.data?.amount ?? 0);
-      const amount = rawAmount > 0 ? rawAmount / 100 : Number(payment.amount);
+      // Paystack's webhook `data.amount` is already integer minor units
+      // (kobo/cents) — no /100 float division needed to reach our own
+      // minor-unit columns; the legacy decimal column is derived from it,
+      // not the other way around.
+      const rawAmountMinor = Math.round(Number(payload?.data?.amount ?? 0));
+      const amountMinor = rawAmountMinor > 0 ? rawAmountMinor : Number(payment.amount_minor ?? Math.round(Number(payment.amount) * 100));
+      const amountDecimal = amountMinor / 100;
       const providerId = String(payload?.data?.id ?? payload?.data?.refund_reference ?? `${eventType}:${reference}`);
       if (isRefund) {
         await client.query(
-          `INSERT INTO payment_refunds(payment_id,provider_refund_id,amount,currency,status,reason,provider_payload,processed_at)
-           VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,NOW()) ON CONFLICT(payment_id,provider_refund_id) DO NOTHING`,
-          [payment.id, providerId, amount, payment.currency, String(payload?.data?.status ?? 'processed'),
+          `INSERT INTO payment_refunds(payment_id,provider_refund_id,amount,amount_minor,currency,status,reason,provider_payload,processed_at)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,NOW()) ON CONFLICT(payment_id,provider_refund_id) DO NOTHING`,
+          [payment.id, providerId, amountDecimal, amountMinor, payment.currency, String(payload?.data?.status ?? 'processed'),
             payload?.data?.customer_note ?? null, JSON.stringify(payload)]);
       }
       const status = isRefund ? 'refunded' : 'chargeback';
       const { rows: updatedRows } = await client.query(
         `UPDATE payment_transactions SET status=$2::varchar,
-           refunded_amount=CASE WHEN $2::varchar='refunded' THEN LEAST(amount,refunded_amount+$3) ELSE refunded_amount END,
+           refunded_amount_minor=CASE WHEN $2::varchar='refunded' THEN LEAST(COALESCE(amount_minor,0),COALESCE(refunded_amount_minor,0)+$3::integer) ELSE refunded_amount_minor END,
+           refunded_amount=CASE WHEN $2::varchar='refunded' THEN LEAST(COALESCE(amount_minor,0),COALESCE(refunded_amount_minor,0)+$3::integer)::numeric/100 ELSE refunded_amount END,
            dispute_status=CASE WHEN $2::varchar='chargeback' THEN $4::varchar ELSE dispute_status END,updated_at=NOW()
-         WHERE id=$1 RETURNING *`, [payment.id, status, amount, eventType]);
+         WHERE id=$1 RETURNING *`, [payment.id, status, amountMinor, eventType]);
       if (payment.subscription_id) {
         await client.query(
           `UPDATE subscriptions SET status='cancelled',revoked_at=NOW(),revocation_reason=$2,
@@ -284,7 +291,7 @@ export function createBillingRepository(db) {
       await client.query(
         `INSERT INTO subscription_events(subscription_id,user_id,payment_id,event_type,metadata)
          VALUES($1,$2,$3,$4,$5::jsonb)`, [payment.subscription_id, payment.user_id, payment.id, status,
-          JSON.stringify({ providerEvent: eventType, providerId, amount })]);
+          JSON.stringify({ providerEvent: eventType, providerId, amountMinor })]);
       await client.query(`INSERT INTO notifications(user_id,category,title,body,link,dedupe_key)
         SELECT $1,'billing',$2,$3,'/dashboard/subscription',$4
         WHERE COALESCE((SELECT billing FROM notification_preferences WHERE user_id=$1),TRUE)

@@ -11,15 +11,47 @@ interface ApiError extends Error {
   status?: number;
 }
 
+// Thrown when a sensitive admin action requires a fresh MFA verification
+// (backend `requireRecentAdminAuth` → `{code: 'ADMIN_STEP_UP_REQUIRED'}`).
+// This is deliberately NOT treated as an expired session — the caller still
+// has a valid session, it just needs to re-prove recent MFA before this one
+// specific action proceeds. See AdminStepUpProvider for how callers recover
+// from this and retry the original request.
+export class StepUpRequiredError extends Error {
+  challengeId: string;
+  retry: () => Promise<any>;
+  constructor(challengeId: string, retry: () => Promise<any>) {
+    super('Recent MFA verification is required for this action');
+    this.name = 'StepUpRequiredError';
+    this.challengeId = challengeId;
+    this.retry = retry;
+  }
+}
+
 function handleSessionExpired() {
   if (typeof window === 'undefined') return;
   clearAdminSession();
   window.location.replace('/admin/login?session=expired');
 }
 
-async function adminFetch(path: string, options: RequestInit = {}): Promise<any> {
+// Concurrent 401s must not each fire their own refresh request — that both
+// wastes round trips and risks the backend's refresh-token-reuse detection
+// treating the second caller as a stolen/replayed token. All callers within
+// the same page share one in-flight refresh.
+let refreshInFlight: Promise<boolean> | null = null;
+function refreshOnce(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
+async function rawFetch(path: string, options: RequestInit): Promise<Response> {
   const hasBody = options.body !== undefined && options.body !== null;
-  const res = await fetch(`${BASE}${path}`, {
+  return fetch(`${BASE}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
@@ -27,17 +59,37 @@ async function adminFetch(path: string, options: RequestInit = {}): Promise<any>
       ...(options.headers as Record<string, string> || {}),
     },
   });
+}
+
+async function adminFetch(path: string, options: RequestInit = {}, _isRetry = false): Promise<any> {
+  const res = await rawFetch(path, options);
 
   if (res.status === 204) return null;
 
-  if (res.status === 401) {
+  const json = await res.json().catch(() => ({})) as Record<string, unknown>;
+
+  // Authentication and MFA endpoints legitimately use 401 for invalid
+  // credentials/challenges. Only /api/admin/* 401s go through the
+  // refresh/step-up handling below.
+  if (res.status === 401 && path.startsWith('/api/admin/')) {
+    if (json?.code === 'ADMIN_STEP_UP_REQUIRED') {
+      throw new StepUpRequiredError(
+        String(json.challengeId),
+        () => adminFetch(path, options, true),
+      );
+    }
+
+    if (!_isRetry) {
+      const refreshed = await refreshOnce();
+      if (refreshed) return adminFetch(path, options, true);
+    }
+
     handleSessionExpired();
     const err = new Error('Session expired. Please sign in again.') as ApiError;
     err.status = 401;
     throw err;
   }
 
-  const json = await res.json() as Record<string, unknown>;
   if (!res.ok) {
     const err = new Error((json?.error as string) || (json?.message as string) || 'Request failed') as ApiError;
     err.status = res.status;
@@ -77,6 +129,12 @@ export const adminApi = {
   }),
   recoverMfa: (mfaToken: string, recoveryCode: string) => adminFetch('/auth/admin/mfa/recover', {
     method: 'POST', body: JSON.stringify({ mfaToken, recoveryCode }),
+  }),
+  verifyStepUp: (challengeId: string, code: string) => adminFetch('/auth/admin/step-up/verify', {
+    method: 'POST', body: JSON.stringify({ challengeId, code }),
+  }),
+  recoverStepUp: (challengeId: string, recoveryCode: string) => adminFetch('/auth/admin/step-up/verify', {
+    method: 'POST', body: JSON.stringify({ challengeId, recoveryCode }),
   }),
   logout: () => adminFetch('/auth/logout', { method: 'POST' }),
 

@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import DataTable from "@/components/admin/DataTable";
 import { adminApi } from "@/lib/adminApi";
+import { useAdminStepUp } from "@/components/admin/AdminStepUpProvider";
 
 const LIMIT = 20;
 
 export default function AdminUsersPage() {
+  const { withStepUp } = useAdminStepUp();
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
   const [pages, setPages]         = useState(1);
@@ -54,7 +56,7 @@ export default function AdminUsersPage() {
     if (!editing) return;
     setSaving(true);
     try {
-      await adminApi.updateUser(editing.id, { role: editRole, is_verified: editVerified, status: editStatus });
+      await withStepUp(() => adminApi.updateUser(editing.id, { role: editRole, is_verified: editVerified, status: editStatus }));
       showToast("User updated successfully");
       setEditing(null);
       load();
@@ -68,7 +70,7 @@ export default function AdminUsersPage() {
   async function handleDelete(user) {
     if (!confirm(`Delete user "${user.username}"? This cannot be undone.`)) return;
     try {
-      await adminApi.deleteUser(user.id);
+      await withStepUp(() => adminApi.deleteUser(user.id));
       showToast("User deleted");
       load();
     } catch (e) {
@@ -101,10 +103,14 @@ export default function AdminUsersPage() {
     });
   }
 
+  // Bulk actions go through the single /users/bulk endpoint (one request,
+  // one step-up prompt) rather than N parallel per-user requests — that also
+  // lets the backend apply last-admin/self-protection across the whole batch
+  // atomically instead of per-item.
   async function handleBulkSuspend() {
     if (!selected.size) return;
     try {
-      await Promise.all([...selected].map((id) => adminApi.updateUserStatus(id, "suspended")));
+      await withStepUp(() => adminApi.bulkUserAction({ ids: [...selected], action: "suspend" }));
       showToast(`${selected.size} user(s) suspended`);
       setSelected(new Set());
       load();
@@ -116,7 +122,7 @@ export default function AdminUsersPage() {
   async function handleBulkUnsuspend() {
     if (!selected.size) return;
     try {
-      await Promise.all([...selected].map((id) => adminApi.updateUserStatus(id, "active")));
+      await withStepUp(() => adminApi.bulkUserAction({ ids: [...selected], action: "unsuspend" }));
       showToast(`${selected.size} user(s) unsuspended`);
       setSelected(new Set());
       load();
@@ -129,7 +135,7 @@ export default function AdminUsersPage() {
     if (!selected.size) return;
     if (!confirm(`Delete ${selected.size} users? This cannot be undone.`)) return;
     try {
-      await Promise.all([...selected].map((id) => adminApi.deleteUser(id)));
+      await withStepUp(() => adminApi.bulkUserAction({ ids: [...selected], action: "delete" }));
       showToast(`${selected.size} user(s) deleted`);
       setSelected(new Set());
       load();

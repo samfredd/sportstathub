@@ -145,3 +145,50 @@ export const updateSubscriptionSchema = {
   },
   additionalProperties: false,
 };
+
+// ─── Bulk User Actions ──────────────────────────────────────────
+// Discriminated per-action payload: `delete` takes no payload, `suspend`/
+// `unsuspend` take only an optional reason, `change_role` requires an
+// explicit role from the enum. Deliberately not `payload: {type:'object'}`,
+// which would accept an arbitrary, unvalidated object regardless of action.
+export const bulkUserSchema = {
+  type: 'object',
+  required: ['ids', 'action'],
+  properties: {
+    ids:     { type: 'array', items: { type: 'integer' }, minItems: 1, maxItems: 100 },
+    action:  { type: 'string', enum: ['delete', 'suspend', 'unsuspend', 'change_role'] },
+    reason:  { type: 'string', maxLength: 500 },
+    payload: { type: 'object' },
+  },
+  additionalProperties: false,
+  allOf: [
+    {
+      if: { properties: { action: { const: 'delete' } } },
+      then: { properties: { payload: { type: 'object', additionalProperties: false, maxProperties: 0 } } },
+    },
+    {
+      if: { properties: { action: { enum: ['suspend', 'unsuspend'] } } },
+      then: { properties: { payload: { type: 'object', additionalProperties: false, maxProperties: 0 } } },
+    },
+    {
+      if: { properties: { action: { const: 'change_role' } } },
+      then: {
+        // `required` must be repeated here, not only inside `payload` —
+        // `properties` validation only applies to keys that are present, so
+        // without this an instance that omits `payload` entirely would skip
+        // the nested `required: ['role']` check and pass validation.
+        required: ['payload'],
+        properties: {
+          payload: {
+            type: 'object',
+            required: ['role'],
+            properties: {
+              role: { type: 'string', enum: ['user', 'creator_pending', 'creator', 'creator_suspended', 'creator_rejected', 'moderator', 'admin'] },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+    },
+  ],
+};

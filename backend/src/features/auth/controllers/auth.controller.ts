@@ -23,6 +23,12 @@ import {
   generateTotpSecret,
   verifyTotp,
 } from "../../../modules/auth/mfa.service.js";
+import {
+  consumeStepUpChallenge,
+  peekStepUpChallenge,
+  registerStepUpAttempt,
+  STEP_UP_MAX_ATTEMPTS,
+} from "../../../modules/auth/step-up.service.js";
 
 // OTP lifetime (seconds)
 // Tradeoff: longer = better UX, shorter = more secure
@@ -307,46 +313,66 @@ export async function resetPassword(request, reply) {
 
   const resetKey = `password_reset:${formattedEmail}`;
   const attemptsKey = `password_reset_attempts:${formattedEmail}`;
+  const lockKey = `password_reset_lock:${formattedEmail}`;
 
   try {
-    const hashedOTP = await request.server.redis.get(resetKey);
-    if (!hashedOTP) {
+    // Serialize the whole read-verify-consume sequence per email so two
+    // concurrent requests holding the same valid OTP can't both pass the
+    // GET+compare before either deletes it (TOCTOU). The loser gets the same
+    // generic "expired or invalid" response — no distinct status that would
+    // reveal contention vs. a genuinely bad code.
+    const locked = await request.server.redis.set(lockKey, "1", "EX", 15, "NX");
+    if (!locked) {
       return reply.status(400).send({ error: "Reset code expired or invalid" });
     }
 
-    const attempts = await request.server.redis.incr(attemptsKey);
-    if (attempts > RESET_MAX_ATTEMPTS) {
-      return reply.status(429).send({ error: "Too many attempts" });
+    try {
+      const hashedOTP = await request.server.redis.get(resetKey);
+      if (!hashedOTP) {
+        return reply.status(400).send({ error: "Reset code expired or invalid" });
+      }
+
+      const attempts = await request.server.redis.incr(attemptsKey);
+      if (attempts > RESET_MAX_ATTEMPTS) {
+        return reply.status(429).send({ error: "Too many attempts" });
+      }
+
+      const isMatch = await comparePasswords(otp, hashedOTP);
+      if (!isMatch) {
+        return reply.status(400).send({ error: "Invalid reset code" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+
+      // Password update + session revocation happen atomically: a crash
+      // between the two must never leave a changed password with live old
+      // sessions still valid.
+      const changedUserId = await request.server.db.transact(async (client) => {
+        const { rows, rowCount } = await client.query(
+          "UPDATE users SET password = $1 WHERE email = $2 RETURNING id",
+          [hashedPassword, formattedEmail]
+        );
+        if (rowCount === 0) return null;
+        await revokeAllUserSessions(client, rows[0].id, "password_reset");
+        return rows[0].id;
+      });
+
+      // Only consume the challenge once the DB transaction has committed —
+      // if it failed, the OTP stays valid so the user can retry.
+      await request.server.redis.del(resetKey);
+      await request.server.redis.del(attemptsKey);
+
+      if (!changedUserId) {
+        return reply.status(400).send({ error: "Invalid request" });
+      }
+
+      return reply.status(200).send({
+        status: "success",
+        message: "Password reset successfully",
+      });
+    } finally {
+      await request.server.redis.del(lockKey);
     }
-
-    const isMatch = await comparePasswords(otp, hashedOTP);
-    if (!isMatch) {
-      return reply.status(400).send({ error: "Invalid reset code" });
-    }
-
-    const hashedPassword = await hashPassword(password);
-    const { rowCount } = await request.server.db.query(
-      "UPDATE users SET password = $1 WHERE email = $2",
-      [hashedPassword, formattedEmail]
-    );
-
-    await request.server.redis.del(resetKey);
-    await request.server.redis.del(attemptsKey);
-
-    if (rowCount === 0) {
-      return reply.status(400).send({ error: "Invalid request" });
-    }
-
-    const { rows: changedUsers } = await request.server.db.query(
-      'SELECT id FROM users WHERE email = $1', [formattedEmail]);
-    if (changedUsers[0]) {
-      await revokeAllUserSessions(request.server.db, changedUsers[0].id, 'password_reset');
-    }
-
-    return reply.status(200).send({
-      status: "success",
-      message: "Password reset successfully",
-    });
   } catch (error) {
     request.log.error(error);
     return reply.status(500).send({
@@ -579,6 +605,74 @@ export async function recoverAdminMfa(request: any, reply: any) {
   }
 }
 
+
+// ================= ADMIN STEP-UP (RECENT-MFA RE-VERIFICATION) =================
+// Verifies a challenge issued by requireRecentAdminAuth (authenticate.ts)
+// when a sensitive admin action hits a stale auth_time. On success this
+// mints a freshly-authenticated session — same mechanism as login/MFA verify
+// — so the retried original request carries an access token whose auth_time
+// passes the recency check.
+export async function verifyAdminStepUp(request: any, reply: any) {
+  const { challengeId, code, recoveryCode } = request.body || {};
+  if ((!code && !recoveryCode) || (code && recoveryCode)) {
+    return reply.status(400).send({ error: 'Provide exactly one of code or recoveryCode' });
+  }
+
+  const adminId = await peekStepUpChallenge(request.server.redis, challengeId);
+  if (!adminId) {
+    return reply.status(401).send({ error: 'Invalid or expired verification challenge' });
+  }
+
+  const attempts = await registerStepUpAttempt(request.server.redis, challengeId);
+  if (attempts > STEP_UP_MAX_ATTEMPTS) {
+    return reply.status(429).send({ error: 'Too many verification attempts' });
+  }
+
+  try {
+    const { rows } = await request.server.db.query(`SELECT * FROM users WHERE id = $1`, [adminId]);
+    const user = rows[0];
+    if (!user || user.role !== 'admin' || user.status !== 'active' || !user.mfa_enrolled_at) {
+      return reply.status(401).send({ error: 'Invalid verification challenge' });
+    }
+
+    let verified = false;
+    if (code) {
+      verified = Boolean(user.mfa_totp_secret_encrypted) &&
+        verifyTotp(decryptMfaSecret(user.mfa_totp_secret_encrypted), code);
+    } else {
+      const { rows: codes } = await request.server.db.query(
+        `SELECT id, code_hash FROM admin_recovery_codes WHERE user_id = $1 AND used_at IS NULL`, [user.id]);
+      for (const candidate of codes) {
+        if (await comparePasswords(String(recoveryCode).toUpperCase(), candidate.code_hash)) {
+          const { rowCount } = await request.server.db.query(
+            `UPDATE admin_recovery_codes SET used_at = NOW() WHERE id = $1 AND used_at IS NULL`, [candidate.id]);
+          verified = rowCount > 0;
+          break;
+        }
+      }
+    }
+
+    if (!verified) {
+      await request.server.db.query(
+        `INSERT INTO admin_logs (admin_id, action, target_type, target_id, metadata)
+         VALUES ($1,'admin.step_up_failed','user',$1,$2::jsonb)`,
+        [user.id, JSON.stringify({ method: code ? 'totp' : 'recovery_code' })]).catch(() => {});
+      return reply.status(401).send({ error: 'Invalid verification code' });
+    }
+
+    await consumeStepUpChallenge(request.server.redis, challengeId);
+    await request.server.db.query(
+      `INSERT INTO admin_logs (admin_id, action, target_type, target_id, metadata)
+       VALUES ($1,'admin.step_up_verified','user',$1,$2::jsonb)`,
+      [user.id, JSON.stringify({ method: code ? 'totp' : 'recovery_code' })]).catch(() => {});
+
+    await issueSession(request, reply, user);
+    return reply.status(200).send({ status: 'success', data: { verified: true } });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ status: 'error', message: 'Internal server error during step-up verification' });
+  }
+}
 
 // ================= REFRESH =================
 export async function refresh(request, reply) {

@@ -1,4 +1,9 @@
 import { hashPassword, comparePasswords } from '../auth/auth.helpers.js';
+import { parseMoneyToMinorUnits } from '../../helpers/money.helpers.js';
+
+function selfActionForbidden(message: string) {
+  return Object.assign(new Error(message), { statusCode: 403 });
+}
 
 export function createAdminService(repo) {
 
@@ -23,7 +28,7 @@ export function createAdminService(repo) {
     return user;
   }
 
-  async function updateUser(adminId, id, payload) {
+  async function updateUser(adminId, id, payload, requestId?: string) {
       const allowed: any = {};
     if (payload.role !== undefined) {
       const VALID_ROLES = ['user', 'creator_pending', 'creator', 'creator_suspended', 'creator_rejected', 'moderator', 'admin'];
@@ -41,6 +46,20 @@ export function createAdminService(repo) {
       allowed.status = payload.status;
     }
 
+    // Last-active-administrator protection already lives in
+    // repo.updateUser (advisory-locked count check). This additionally
+    // blocks an admin from demoting/suspending *themselves* even when
+    // other admins remain active — a distinct rule from "don't zero out
+    // the admin pool".
+    if (Number(adminId) === Number(id)) {
+      const demotesRole = allowed.role !== undefined && allowed.role !== 'admin';
+      const disablesStatus = allowed.status !== undefined && allowed.status !== 'active';
+      if (demotesRole || disablesStatus) {
+        throw selfActionForbidden('Administrators cannot change their own role or account status');
+      }
+    }
+
+    const previous = repo.findUserById ? await repo.findUserById(id) : null;
     const updated = await repo.updateUser(id, allowed);
     if (!updated) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
@@ -49,13 +68,22 @@ export function createAdminService(repo) {
       action: 'user.updated',
       targetType: 'user',
       targetId: id,
-      metadata: allowed,
+      metadata: {
+        changes: allowed,
+        previousState: previous ? { role: previous.role, status: previous.status, is_verified: previous.is_verified } : null,
+        requestId: requestId ?? null,
+      },
     });
 
     return updated;
   }
 
-  async function deleteUser(adminId, id) {
+  async function deleteUser(adminId, id, requestId?: string) {
+    if (Number(adminId) === Number(id)) {
+      throw selfActionForbidden('Administrators cannot delete their own account');
+    }
+
+    const previous = repo.findUserById ? await repo.findUserById(id) : null;
     const deleted = await repo.deleteUser(id);
     if (!deleted) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
@@ -64,6 +92,10 @@ export function createAdminService(repo) {
       action: 'user.deleted',
       targetType: 'user',
       targetId: id,
+      metadata: {
+        previousState: previous ? { username: previous.username, email: previous.email, role: previous.role } : null,
+        requestId: requestId ?? null,
+      },
     });
 
     return deleted;
@@ -185,15 +217,24 @@ export function createAdminService(repo) {
   async function createPlan(adminId, payload) {
     const existing = await repo.findPlanBySlug(payload.slug);
     if (existing) throw Object.assign(new Error('A plan with this slug already exists'), { statusCode: 409 });
-    const plan = await repo.createPlan(payload);
+    const priceMonthlyMinor = parseMoneyToMinorUnits(payload.priceMonthly ?? 0, 'priceMonthly');
+    const priceYearlyMinor = parseMoneyToMinorUnits(payload.priceYearly ?? 0, 'priceYearly');
+    const plan = await repo.createPlan({ ...payload, priceMonthlyMinor, priceYearlyMinor });
     await repo.createAuditLog({ adminId, action: 'plan.created', targetType: 'subscription_plan', targetId: plan.id, metadata: { slug: plan.slug } });
     return plan;
   }
 
   async function updatePlan(adminId, id, payload) {
-    const updated = await repo.updatePlan(id, payload);
+    const patch: any = { ...payload };
+    if (payload.priceMonthly !== undefined) patch.priceMonthlyMinor = parseMoneyToMinorUnits(payload.priceMonthly, 'priceMonthly');
+    if (payload.priceYearly !== undefined) patch.priceYearlyMinor = parseMoneyToMinorUnits(payload.priceYearly, 'priceYearly');
+    const previous = await repo.findPlanById(id);
+    const updated = await repo.updatePlan(id, patch);
     if (!updated) throw Object.assign(new Error('Plan not found'), { statusCode: 404 });
-    await repo.createAuditLog({ adminId, action: 'plan.updated', targetType: 'subscription_plan', targetId: id, metadata: payload });
+    await repo.createAuditLog({
+      adminId, action: 'plan.updated', targetType: 'subscription_plan', targetId: id,
+      metadata: { changes: payload, previousState: previous ? { priceMonthly: previous.price_monthly, priceYearly: previous.price_yearly } : null },
+    });
     return updated;
   }
 
@@ -406,13 +447,19 @@ export function createAdminService(repo) {
   }
 
   // ─── BULK USER ACTION ─────────────────────────────────────
-  async function bulkUserAction(adminId, { ids, action, payload = {} }: { ids: number[]; action: string; payload?: any }) {
+  async function bulkUserAction(adminId, { ids, action, payload = {}, reason }: { ids: number[]; action: string; payload?: any; reason?: string }, requestId?: string) {
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) {
       throw Object.assign(new Error('ids must be an array of 1–100 integers'), { statusCode: 400 });
     }
     const VALID_ACTIONS = ['delete', 'suspend', 'unsuspend', 'change_role'];
     if (!VALID_ACTIONS.includes(action)) {
       throw Object.assign(new Error(`action must be one of: ${VALID_ACTIONS.join(', ')}`), { statusCode: 400 });
+    }
+    // Self-management always goes through the single-user/profile endpoints,
+    // never a bulk batch — keeps "can an admin affect their own account"
+    // reasoning in one place instead of re-deriving it per bulk action.
+    if (ids.map(Number).includes(Number(adminId))) {
+      throw selfActionForbidden('You cannot include your own account in a bulk action');
     }
 
     let affected = 0;
@@ -426,7 +473,10 @@ export function createAdminService(repo) {
       const rows = await repo.bulkUpdateUsers(ids, { status: 'active' });
       affected = rows.length;
     } else if (action === 'change_role') {
-      if (!payload?.role) throw Object.assign(new Error('payload.role is required for change_role'), { statusCode: 400 });
+      const VALID_ROLES = ['user', 'creator_pending', 'creator', 'creator_suspended', 'creator_rejected', 'moderator', 'admin'];
+      if (!payload?.role || !VALID_ROLES.includes(payload.role)) {
+        throw Object.assign(new Error('payload.role is required and must be a valid role for change_role'), { statusCode: 400 });
+      }
       const rows = await repo.bulkUpdateUsers(ids, { role: payload.role });
       affected = rows.length;
     }
@@ -436,7 +486,7 @@ export function createAdminService(repo) {
       action: 'users.bulk_action',
       targetType: 'user',
       targetId: null,
-      metadata: { action, count: ids.length },
+      metadata: { action, count: ids.length, requestedIds: ids, affected, reason: reason ?? null, payload, requestId: requestId ?? null },
     });
 
     return { affected };
@@ -465,7 +515,10 @@ export function createAdminService(repo) {
   }
 
   // ─── SUSPEND / BAN USER ───────────────────────────────────
-  async function suspendUser(adminId, userId, status: 'active' | 'suspended' | 'banned') {
+  async function suspendUser(adminId, userId, status: 'active' | 'suspended' | 'banned', reason?: string, requestId?: string) {
+    if (Number(adminId) === Number(userId) && status !== 'active') {
+      throw selfActionForbidden('Administrators cannot suspend or ban their own account');
+    }
     const updated = await repo.updateUser(userId, { status });
     if (!updated) throw Object.assign(new Error('User not found'), { statusCode: 404 });
     await repo.createAuditLog({
@@ -473,7 +526,7 @@ export function createAdminService(repo) {
       action: `user.${status}`,
       targetType: 'user',
       targetId: userId,
-      metadata: { status },
+      metadata: { status, reason: reason ?? null, requestId: requestId ?? null },
     });
     return updated;
   }

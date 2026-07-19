@@ -8,15 +8,49 @@ Rotate any credential that has ever appeared in Git history. Merely replacing an
 
 ## Deploy
 
-1. Take a tested PostgreSQL backup and record the currently deployed immutable image SHA.
-2. Run secret scanning, production dependency audit, TypeScript typechecks/tests/builds, frontend lint/build, OddSwitch Ruff/tests, and Docker image builds.
-3. Apply migrations once with `cd backend && npm run migrate`. Migrations 015–021 are additive/backfilled and are safe to re-run.
-4. Deploy images pinned to the Git commit SHA. Do not use `latest` for a production release. The workflow prunes stopped containers, unused images, and build cache before pulling; it never prunes persistent volumes.
-5. Require `GET /health/live` and `GET /health/ready` to succeed before routing traffic. Fetch `/openapi.json` as a contract smoke test.
-6. Smoke-test login/refresh/logout, admin MFA, public search, a premium access denial, and a sandbox Paystack verification. Verify payment and OddSwitch workers are consuming their queues.
-7. Watch error rate, payment reconciliation failures, webhook failures, AI quota pressure, SSE connections, and OddSwitch job failures during the rollout window.
+Steps 1–6 below are automated by `.github/workflows/production.yml`'s `deploy`
+job on every push to `main` (or manual dispatch with `deploy: true`). This
+section documents what the workflow actually does, so an operator can reason
+about a run without re-reading the script.
 
-The current GitHub workflow authenticates with `PRODUCTION_USER` and `PRODUCTION_PASSWORD`. It connects to `PRODUCTION_HOST` on `PRODUCTION_SSH_PORT` (port 22 by default) and validates `PRODUCTION_HOST_FINGERPRINT` when that secret is configured. The old environment-copy deployment was removed; secrets are supplied to the immutable-image deployment at runtime.
+1. **Preflight**: the job refuses to run at all if `PRODUCTION_HOST_FINGERPRINT`
+   is unset — there is no "skip host-key verification" fallback.
+2. **Backup**: a `pg_dump` of the live database is taken and gzip-integrity
+   checked before anything else touches the database. An empty or corrupt
+   backup aborts the deploy. Backups land in `$PRODUCTION_APP_DIR/backups/`
+   on the host, named `pre-deploy-<UTC timestamp>-<commit SHA>.sql.gz`.
+3. **Migrations**: run once, in a dedicated one-off `docker compose run --rm
+   backend node dist/migrate.js` container — never implicitly on every
+   backend container boot (see `backend/docker-entrypoint.sh`). A migration
+   failure aborts the deploy before any new container serves traffic; the
+   previous release keeps running untouched.
+4. **Release**: images pinned to the exact Git commit SHA are pulled and
+   started (`docker compose up -d`). Never `latest` for a production release.
+5. **Health + smoke tests**: per-container Docker healthchecks are polled
+   first, then `deploy/smoke-test.sh` runs against the live domain —
+   `/health/live`, `/health/ready` (DB + Redis), homepage, public
+   leagues/live-matches endpoints, a non-destructive `/api/subscription-plans`
+   read, a frontend static asset, and that `/auth/login` responds with a
+   clean 4xx rather than hanging or 5xx-ing.
+6. **On failure**: any of steps 4–5 failing triggers an automatic rollback —
+   the previous release's images (recorded in `.last_successful_tag` by the
+   prior successful deploy) are redeployed. **The database is never
+   auto-reverted** — an irreversible-migration auto-rollback can silently
+   corrupt data. If the just-applied migration is genuinely incompatible with
+   the rolled-back image, restore the pre-deploy backup from step 2 manually
+   (see Rollback below) — this requires a human decision, not automation.
+   Image/build-cache pruning only happens after a successful deploy, so a
+   failed deploy always has the previous release's images available locally
+   for an instant rollback without re-pulling from GHCR.
+
+After a successful automated deploy, still manually verify: admin MFA
+login, a premium-access denial, and a sandbox Paystack verification, since
+those require real credentials/test fixtures the smoke script doesn't have.
+Watch error rate, payment reconciliation failures, webhook failures, AI
+quota pressure, SSE connections, and OddSwitch job failures during the
+rollout window.
+
+The current GitHub workflow authenticates with `PRODUCTION_USER` and `PRODUCTION_PASSWORD`. It connects to `PRODUCTION_HOST` on `PRODUCTION_SSH_PORT` (port 22 by default) and requires `PRODUCTION_HOST_FINGERPRINT` — get it with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` and store the result as that secret. The old environment-copy deployment was removed; secrets are supplied to the immutable-image deployment at runtime.
 
 ## Bootstrap an administrator
 
@@ -31,11 +65,63 @@ The account cannot use admin routes until TOTP enrollment is completed. Create l
 
 ## Rollback
 
-1. Stop routing new traffic if data integrity is at risk.
-2. Roll application images back to the recorded prior commit SHA.
-3. Do not blindly reverse migrations 015–021: they contain security/session/payment/moderation/notification records and additive columns. The old application should tolerate the additions. Restore the pre-deploy database backup only when the release wrote incompatible/corrupt data and after preserving incident evidence.
+An image-only rollback (previous release, current database) happens
+automatically when a deploy's health checks or smoke tests fail — see
+"On failure" above. Use this section when you need to roll back **after** a
+deploy already succeeded and passed smoke tests, or when the automatic
+rollback itself needs a manual follow-up.
+
+1. Stop routing new traffic if data integrity is at risk (e.g. `docker
+   compose -f docker-compose.prod.yml stop backend frontend` on the host).
+2. Roll application images back to the recorded prior commit SHA: SSH in and
+   run `IMAGE_TAG=<previous sha> docker compose -f docker-compose.prod.yml
+   up -d --remove-orphans`, or re-trigger the workflow via `workflow_dispatch`
+   pinned to that commit.
+3. Do not blindly reverse migrations: they contain security/session/payment/moderation/notification records and additive columns, and the migration runner (`backend/migrate.ts`) re-executes every `.sql` file on every run with no per-migration tracking — hand-editing an already-applied migration file is not a safe undo mechanism. The old application should tolerate additive changes. Restore the pre-deploy database backup (`$PRODUCTION_APP_DIR/backups/pre-deploy-*.sql.gz` on the host) only when the release wrote incompatible/corrupt data, and only after preserving incident evidence (export the current DB state first if at all possible).
 4. If a signing/session secret was implicated, revoke it and invalidate sessions; do not restore the compromised value to make old sessions work.
-5. Re-run liveness/readiness plus the critical login and payment smoke tests, then record the rollback and root cause.
+5. Re-run liveness/readiness plus the critical login and payment smoke tests (`deploy/smoke-test.sh https://<domain>`), then record the rollback and root cause.
+
+## Host hardening (password-based SSH deployment)
+
+Password-based SSH deployment is a deliberate, documented choice for this
+project (see commit history: key-based auth was tried and repeatedly failed
+to parse in this environment). It stays supported. These are host-level
+configuration steps outside this repository's files — apply them once,
+directly on the production host, and re-verify after any host rebuild:
+
+- **Restrict the deployment user.** Create a dedicated non-root user for
+  `PRODUCTION_USER` (do not deploy as `root`), and grant it only what it
+  needs: membership in the `docker` group (or equivalent), and write access
+  to `PRODUCTION_APP_DIR`. It should not have sudo access beyond what
+  Docker itself requires.
+- **Disable root SSH login.** In `/etc/ssh/sshd_config`, set
+  `PermitRootLogin no`, then `systemctl reload sshd`.
+- **Scope password authentication.** Prefer `Match User <deploy-user>` +
+  `PasswordAuthentication yes` for the deployment account specifically, with
+  `PasswordAuthentication no` as the global default for every other account,
+  if the host supports other accounts. If the deploy user is the only
+  account that ever needs password auth, this keeps the blast radius of a
+  leaked password limited to that one account's `docker`-group privileges.
+- **Install and enable Fail2ban** (or equivalent) on the `sshd` jail to
+  rate-limit and temporarily ban repeated failed SSH auth attempts:
+  `apt install fail2ban`, ensure the `[sshd]` jail is enabled in
+  `/etc/fail2ban/jail.local`.
+- **Firewall-level SSH rate limiting** as defense in depth alongside
+  Fail2ban, e.g. with `ufw`: `ufw limit OpenSSH` (or the equivalent
+  `iptables`/`nftables` recent-connections rule) caps new connection
+  attempts per source IP per time window.
+- **Strong password policy and rotation.** The deployment password
+  (`PRODUCTION_PASSWORD` secret) should be long and randomly generated (a
+  password manager, not a memorized phrase), rotated on a schedule (e.g.
+  every 90 days) and immediately after any suspected exposure, and updated
+  in GitHub Secrets in the same change. Never log it — the deploy script
+  never echoes `$APP_...PASSWORD`-shaped values, and any change to that
+  script must preserve that.
+- **Verify the host fingerprint stays current.** If the host is ever rebuilt
+  or its SSH host key rotated, regenerate `PRODUCTION_HOST_FINGERPRINT`
+  (`ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`) and update the GitHub
+  secret before the next deploy — the preflight check in the workflow will
+  otherwise correctly refuse to deploy with a stale/missing fingerprint.
 
 ## External/manual follow-up
 

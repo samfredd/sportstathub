@@ -26,13 +26,14 @@ export function createAdminController(service) {
     const updated = await service.updateUser(
       request.user.id,
       parseInt(request.params.id),
-      request.body
+      request.body,
+      request.id
     );
     return ok(reply, updated);
   }
 
   async function deleteUser(request, reply) {
-    await service.deleteUser(request.user.id, parseInt(request.params.id));
+    await service.deleteUser(request.user.id, parseInt(request.params.id), request.id);
     return reply.status(204).send();
   }
 
@@ -214,8 +215,8 @@ export function createAdminController(service) {
 
   // ─── BULK USER ACTION ─────────────────────────────────────
   async function bulkUserAction(request, reply) {
-    const { ids, action, payload } = request.body as any;
-    return ok(reply, await service.bulkUserAction(request.user.id, { ids, action, payload }));
+    const { ids, action, payload, reason } = request.body as any;
+    return ok(reply, await service.bulkUserAction(request.user.id, { ids, action, payload, reason }, request.id));
   }
 
   // ─── SUBSCRIPTION FUNNEL ──────────────────────────────────
@@ -234,8 +235,8 @@ export function createAdminController(service) {
 
   // ─── UPDATE USER STATUS ───────────────────────────────────
   async function updateUserStatus(request, reply) {
-    const { status } = request.body as any;
-    return ok(reply, await service.suspendUser(request.user.id, parseInt(request.params.id), status));
+    const { status, reason } = request.body as any;
+    return ok(reply, await service.suspendUser(request.user.id, parseInt(request.params.id), status, reason, request.id));
   }
 
   return {

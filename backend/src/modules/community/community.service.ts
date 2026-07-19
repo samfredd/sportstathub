@@ -49,15 +49,29 @@ export function createCommunityService(repo, footballService?, newsService?) {
   const mentionUsernames=(textValue: unknown)=>[...new Set([...String(textValue??'').matchAll(/(?:^|\s)@([a-zA-Z0-9_]{3,30})\b/g)].map(match=>match[1].toLowerCase()))].slice(0,20);
   async function requiredPlanForFeature(key: string, fallback = 'pro') {
     if (!repo.findFeatureFlag) return null;
-    const flag = await repo.findFeatureFlag(key).catch(() => null);
+    const flag = await repo.findFeatureFlag(key);
     if (!flag || !flag.is_enabled || flag.required_plan === 'free') return null;
     return flag.required_plan ?? fallback;
+  }
+
+  // Fail-closed wrapper: a lookup failure is NOT the same as "no plan
+  // required" — conflating the two previously made a DB/Redis outage unlock
+  // premium content. On failure this defaults to the most restrictive plan
+  // ('pro') so paying/enterprise users and admins are unaffected while
+  // free-tier access is masked, rather than either opening access or hard-
+  // failing the whole request.
+  async function requiredPlanForFeatureFailClosed(key: string, fallback = 'pro') {
+    try {
+      return await requiredPlanForFeature(key, fallback);
+    } catch {
+      return fallback;
+    }
   }
 
   async function listPredictions(filters, user = null) {
     const cursorData=filters?.pagination==='cursor'?decodeCursor(filters.cursor,filters.cursor?['createdEpoch']:[]):null;
     const rows = await repo.listPredictions(cursorData ? {...filters,cursorData} : filters);
-    const unlimitedRequiredPlan = await requiredPlanForFeature('picks_unlimited');
+    const unlimitedRequiredPlan = await requiredPlanForFeatureFailClosed('picks_unlimited');
     const pageRows=filters?.pagination==='cursor'?rows.slice(0,filters.limit):rows;
     const items=pageRows.map(mapPrediction).map((prediction, index) => {
       const isLockedByFeature = Boolean(unlimitedRequiredPlan && index >= 3);
@@ -73,7 +87,7 @@ export function createCommunityService(repo, footballService?, newsService?) {
     const row = await repo.findPredictionById(id);
     if (!row) throw notFound('Prediction not found');
     const prediction = mapPrediction(row);
-    const detailRequiredPlan = await requiredPlanForFeature('predictions_full');
+    const detailRequiredPlan = await requiredPlanForFeatureFailClosed('predictions_full');
     requireContentAccess(user, {
       isPremium: prediction.isPremium || Boolean(detailRequiredPlan),
       requiredPlan: detailRequiredPlan ?? 'pro',
@@ -137,7 +151,7 @@ export function createCommunityService(repo, footballService?, newsService?) {
       const row = await repo.findPredictionById(filters.targetId);
       if (row) {
         const prediction = mapPrediction(row);
-        const detailRequiredPlan = await requiredPlanForFeature('predictions_full');
+        const detailRequiredPlan = await requiredPlanForFeatureFailClosed('predictions_full');
         requireContentAccess(user, {
           isPremium: prediction.isPremium || Boolean(detailRequiredPlan),
           requiredPlan: detailRequiredPlan ?? 'pro',
@@ -156,7 +170,7 @@ export function createCommunityService(repo, footballService?, newsService?) {
       const row = await repo.findPredictionById(payload.targetId);
       if (row) {
         const prediction = mapPrediction(row);
-        const detailRequiredPlan = await requiredPlanForFeature('predictions_full');
+        const detailRequiredPlan = await requiredPlanForFeatureFailClosed('predictions_full');
         requireContentAccess(user, {
           isPremium: prediction.isPremium || Boolean(detailRequiredPlan),
           requiredPlan: detailRequiredPlan ?? 'pro',

@@ -221,3 +221,54 @@ test('profile avatar URLs require HTTPS on an approved host',async()=>{
   const updated=await service.updateProfile(7,{avatar_url:'https://lh3.googleusercontent.com/avatar.png'});
   assert.equal(updated.avatar_url,'https://lh3.googleusercontent.com/avatar.png');
 });
+
+test('getPrediction fails closed (masks content) when the entitlement flag lookup throws', async () => {
+  const repo: any = makeRepo();
+  repo.premiumRow.is_premium = false; // content itself isn't row-level premium
+  repo.findFeatureFlag = async () => { throw new Error('redis down'); };
+  const service = createCommunityService(repo);
+
+  // Guests and free users must not see full content when the flag lookup
+  // that could have gated it can't be verified — the outage must not open
+  // access wider than "flag is genuinely off" would have.
+  await assert.rejects(
+    () => service.getPrediction(99, null),
+    (error: any) => error.statusCode === 401
+  );
+  await assert.rejects(
+    () => service.getPrediction(99, { role: 'user', subscription_plan: 'free', subscription_status: 'active' }),
+    (error: any) => error.statusCode === 403
+  );
+
+  // Paying users and admins stay unaffected by the outage.
+  const proPrediction = await service.getPrediction(99, {
+    role: 'user', subscription_plan: 'pro', subscription_status: 'active',
+  });
+  assert.equal(proPrediction.bookingCode.code, 'FULLCODE');
+  const adminPrediction = await service.getPrediction(99, { role: 'admin' });
+  assert.equal(adminPrediction.bookingCode.code, 'FULLCODE');
+});
+
+test('listPredictions fails closed on entitlement lookup failure instead of unlocking every item', async () => {
+  const repo: any = makeRepo();
+  repo.listPredictions = async () =>
+    Array.from({ length: 5 }, (_, i) => ({ ...repo.premiumRow, id: 100 + i, is_premium: false }));
+  repo.findFeatureFlag = async () => { throw new Error('db down'); };
+  const service = createCommunityService(repo);
+
+  const items = await service.listPredictions({}, null);
+  assert.equal(items[0].access?.locked ?? false, false, 'first free-preview items stay open');
+  assert.equal(items[3].access.locked, true, 'items past the free preview must fail closed, not open');
+  assert.equal(items[4].access.locked, true);
+});
+
+test('a genuinely disabled or missing feature flag (not a failure) still grants free access', async () => {
+  const repo: any = makeRepo();
+  repo.listPredictions = async () =>
+    Array.from({ length: 5 }, (_, i) => ({ ...repo.premiumRow, id: 100 + i, is_premium: false }));
+  repo.findFeatureFlag = async () => null; // flag genuinely doesn't exist — not a lookup failure
+  const service = createCommunityService(repo);
+
+  const items = await service.listPredictions({}, null);
+  assert.equal(items[4].access?.locked ?? false, false, 'a missing flag must not be treated as a failure');
+});

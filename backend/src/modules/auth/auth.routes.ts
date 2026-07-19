@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { beginAdminMfaEnrollment, forgotPassword, login, logout, recoverAdminMfa, refresh, register, resetPassword, verifyAdminMfa, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
+import { beginAdminMfaEnrollment, forgotPassword, login, logout, recoverAdminMfa, refresh, register, resetPassword, verifyAdminMfa, verifyAdminStepUp, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
 import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, verifyOTPSchema } from './auth.schemas.js';
 import { clearSessionCookies } from './session.service.js';
 
@@ -25,6 +25,13 @@ async function authRoutes(fastify) {
       recoveryCode: { type: 'string', pattern: '^[A-Fa-f0-9]{12}$' },
     }, additionalProperties: false } }, ...strictRateLimit,
   }, recoverAdminMfa);
+  fastify.post('/auth/admin/step-up/verify', {
+    schema: { body: { type: 'object', required: ['challengeId'], properties: {
+      challengeId: { type: 'string', format: 'uuid' },
+      code: { type: 'string', pattern: '^\\d{6}$' },
+      recoveryCode: { type: 'string', pattern: '^[A-Fa-f0-9]{12}$' },
+    }, additionalProperties: false } }, ...strictRateLimit,
+  }, verifyAdminStepUp);
   fastify.post('/auth/refresh',         { ...authRateLimit }, refresh);
   fastify.post('/auth/logout', logout);
   fastify.get('/auth/sessions', { onRequest: [fastify.authenticate] }, async (request: any, reply) => {

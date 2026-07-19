@@ -31,7 +31,9 @@ COPY --from=builder /app/dist ./dist
 # SQL migration files (not compiled by tsc, must be copied separately)
 COPY --from=builder /app/src/migrations ./dist/src/migrations
 
-# Startup script: runs migrations then starts server
+# Startup script: starts the server only. Migrations run as a separate
+# one-off container in the deploy workflow, not on every container start
+# (see docker-entrypoint.sh).
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 

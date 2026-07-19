@@ -1,24 +1,11 @@
 import crypto from 'node:crypto';
+import { hasMinorUnitsValue, minorUnitsToDecimal } from '../../helpers/money.helpers.js';
 
 const VALID_INTERVALS = new Set(['monthly', 'yearly']);
 
 function toNumber(value: unknown): number {
   const amount = Number(value);
   return Number.isFinite(amount) ? amount : 0;
-}
-
-function toSubunit(amount: number): number {
-  return Math.round(amount * 100);
-}
-
-function addInterval(date: Date, interval: string): Date {
-  const next = new Date(date);
-  if (interval === 'yearly') {
-    next.setFullYear(next.getFullYear() + 1);
-  } else {
-    next.setMonth(next.getMonth() + 1);
-  }
-  return next;
 }
 
 function normalizeReference(reference: string): string {
@@ -30,8 +17,21 @@ function createReference(userId: number | string, plan: string): string {
   return normalizeReference(`pst_${userId}_${plan}_${Date.now()}_${suffix}`);
 }
 
-function planAmount(plan: any, interval: string): number {
-  return toNumber(interval === 'yearly' ? plan.price_yearly : plan.price_monthly);
+// The plan row's *_minor columns are the source of truth (integer cents/
+// kobo) — this reads them directly rather than re-deriving minor units from
+// the legacy decimal columns, so checkout never round-trips through
+// floating point at all.
+function planAmountMinor(plan: any, interval: string): number {
+  const raw = interval === 'yearly' ? plan.price_yearly_minor : plan.price_monthly_minor;
+  if (hasMinorUnitsValue(raw)) return Number(raw);
+  // *_minor is nullable (see migration 023) — a plan row written before a
+  // backfill, or by something that only set the legacy decimal column,
+  // still has a valid price. NUMERIC(10,2) values convert to minor units
+  // exactly (no repeated float arithmetic, just one Math.round on an
+  // already 2-decimal-place number), so this fallback is not the kind of
+  // float drift the minor-units migration exists to prevent.
+  const decimal = Number(interval === 'yearly' ? plan.price_yearly : plan.price_monthly);
+  return Number.isFinite(decimal) ? Math.round(decimal * 100) : 0;
 }
 
 function mapPlan(plan: any) {
@@ -39,6 +39,8 @@ function mapPlan(plan: any) {
     ...plan,
     price_monthly: toNumber(plan.price_monthly),
     price_yearly: toNumber(plan.price_yearly),
+    price_monthly_minor: hasMinorUnitsValue(plan.price_monthly_minor) ? Number(plan.price_monthly_minor) : Math.round(toNumber(plan.price_monthly) * 100),
+    price_yearly_minor: hasMinorUnitsValue(plan.price_yearly_minor) ? Number(plan.price_yearly_minor) : Math.round(toNumber(plan.price_yearly) * 100),
     currency: String(plan.currency || 'USD').toUpperCase(),
   };
 }
@@ -64,12 +66,12 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
     if (!plan) throw Object.assign(new Error('Plan not found'), { statusCode: 404 });
 
     const currency = String(plan.currency || 'NGN').toUpperCase();
-    const amount = planAmount(plan, interval);
+    const amountMinor = planAmountMinor(plan, interval);
     const SUPPORTED = new Set(['NGN', 'USD', 'GHS', 'ZAR', 'KES']);
     if (!SUPPORTED.has(currency)) {
       throw Object.assign(new Error(`Currency ${currency} is not supported by Paystack`), { statusCode: 400 });
     }
-    if (amount <= 0) {
+    if (amountMinor <= 0) {
       throw Object.assign(new Error('Plan amount must be greater than zero'), { statusCode: 400 });
     }
 
@@ -78,13 +80,16 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       userId: user.id,
       plan: plan.slug,
       billingInterval: interval,
-      amount,
+      amountMinor,
       currency,
     };
 
+    // amountMinor is already integer minor units read straight from the
+    // plan row — no float multiplication needed to reach Paystack's
+    // subunit-amount API.
     const checkout = await paystack.initializeTransaction({
       email: user.email,
-      amount: toSubunit(amount),
+      amount: amountMinor,
       currency,
       reference,
       callbackUrl,
@@ -97,7 +102,7 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       reference: checkout.reference || reference,
       plan: plan.slug,
       billingInterval: interval,
-      amount,
+      amountMinor,
       currency,
       status: 'pending',
       authorizationUrl: checkout.authorizationUrl,
@@ -109,7 +114,8 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       authorizationUrl: checkout.authorizationUrl,
       accessCode: checkout.accessCode,
       reference: checkout.reference || reference,
-      amount,
+      amount: minorUnitsToDecimal(amountMinor),
+      amountMinor,
       currency,
       plan: mapPlan(plan),
       interval,
@@ -149,7 +155,9 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
     }
 
     const verification = await paystack.verifyTransaction(reference);
-    const expectedAmount = toSubunit(toNumber(payment.amount));
+    const expectedAmount = hasMinorUnitsValue(payment.amount_minor)
+      ? Number(payment.amount_minor)
+      : Math.round(toNumber(payment.amount) * 100);
     const expectedCurrency = String(payment.currency).toUpperCase();
     const actualCurrency = String(verification.currency || '').toUpperCase();
     const successful = verification.status === 'success';
@@ -176,7 +184,7 @@ export function createBillingService({ repo, paystack, callbackUrl = null }: { r
       throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
     }
     const payments = await repo.findPaymentsByUser(user.id, { limit, offset });
-    return payments.map((p: any) => ({ ...p, amount: toNumber(p.amount) }));
+    return payments.map((p: any) => ({ ...p, amount: toNumber(p.amount), amountMinor: hasMinorUnitsValue(p.amount_minor) ? Number(p.amount_minor) : Math.round(toNumber(p.amount) * 100) }));
   }
 
   async function getSubscription(user: any) {
