@@ -64,6 +64,65 @@ function clearAuthCookie(reply: any) {
   reply.clearCookie("token", { path: "/" });
 }
 
+// ── Refresh tokens ─────────────────────────────────────────────────────────
+//
+// The access-token cookie above is short-lived (config.jwtExpiration, ~15
+// min) so a stolen/leaked cookie has a small blast radius. The refresh token
+// is what lets a session survive past that without forcing the user to
+// log in again: it's a long-lived, single-use, revocable credential stored
+// server-side (Redis), scoped narrowly to /auth/* so it isn't sent on every
+// request like the access-token cookie is.
+//
+// Only its SHA-256 hash is stored — mirroring how OTPs are hashed — so a
+// Redis read (backup, log, replica) can't hand out a usable token directly.
+
+const REFRESH_COOKIE_NAME = "refresh_token";
+
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function issueRefreshToken(redis: any, userId: number): Promise<string> {
+  const token = crypto.randomBytes(32).toString("hex");
+  await redis.setex(`refresh:${hashToken(token)}`, config.refreshTokenExpiration, String(userId));
+  return token;
+}
+
+async function revokeRefreshToken(redis: any, token?: string): Promise<void> {
+  if (!token) return;
+  await redis.del(`refresh:${hashToken(token)}`);
+}
+
+function setRefreshCookie(reply: any, token: string) {
+  reply.setCookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: "lax",
+    path: "/auth", // only sent back on /auth/refresh and /auth/logout, not every request
+    maxAge: config.refreshTokenExpiration,
+  });
+}
+
+function clearRefreshCookie(reply: any) {
+  reply.clearCookie(REFRESH_COOKIE_NAME, { path: "/auth" });
+}
+
+/**
+ * Issue a full session for a user: signs a short-lived access token into the
+ * httpOnly cookie, and a long-lived refresh token into its own httpOnly
+ * cookie. Every login path (password, OTP, OAuth, admin) should go through
+ * this so they can't drift out of sync with each other.
+ */
+export async function issueSession(request: any, reply: any, user: any): Promise<string> {
+  const token = request.server.jwt.sign({ id: user.id, email: user.email, role: user.role });
+  setAuthCookie(reply, token);
+
+  const refreshToken = await issueRefreshToken(request.server.redis, user.id);
+  setRefreshCookie(reply, refreshToken);
+
+  return token;
+}
+
 
 // ================= REGISTER =================
 export async function register(request, reply) {
@@ -135,8 +194,7 @@ export async function register(request, reply) {
         [formattedEmail]
       );
       const u = verified[0];
-      const token = request.server.jwt.sign({ id: u.id, email: u.email, role: u.role });
-      setAuthCookie(reply, token);
+      const token = await issueSession(request, reply, u);
       return reply.status(200).send({
         status: "success",
         message: "Registration successful",
@@ -304,12 +362,7 @@ export async function verifyOTP(request, reply) {
     }
 
     // Issue JWT token
-    const token = request.server.jwt.sign({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-    setAuthCookie(reply, token);
+    const token = await issueSession(request, reply, user);
 
     return reply.status(200).send({
       status: "success",
@@ -506,12 +559,7 @@ export async function login(request, reply) {
     await request.server.redis.del(attemptsKey);
 
     // Issue token
-    const token = request.server.jwt.sign({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-    setAuthCookie(reply, token);
+    const token = await issueSession(request, reply, user);
 
     return reply.status(200).send({
       status: "success",
@@ -581,12 +629,7 @@ export async function registerAdmin(request, reply) {
 
     const user = rows[0];
 
-    const token = request.server.jwt.sign({
-      id:    user.id,
-      email: user.email,
-      role:  user.role,
-    });
-    setAuthCookie(reply, token);
+    const token = await issueSession(request, reply, user);
 
     request.log.info(`[ADMIN_REGISTER] New admin account created: ${formattedEmail}`);
 
@@ -603,8 +646,65 @@ export async function registerAdmin(request, reply) {
 }
 
 
+// ================= REFRESH =================
+export async function refresh(request, reply) {
+  try {
+    const oldToken = request.cookies?.[REFRESH_COOKIE_NAME];
+    if (!oldToken) {
+      return reply.status(401).send({ status: "error", error: "No refresh token" });
+    }
+
+    const key = `refresh:${hashToken(oldToken)}`;
+    const userId = await request.server.redis.get(key);
+
+    // Rotate immediately, whether or not it turns out to be valid — a used or
+    // stale key should never be replayable.
+    await request.server.redis.del(key);
+
+    if (!userId) {
+      clearAuthCookie(reply);
+      clearRefreshCookie(reply);
+      return reply.status(401).send({ status: "error", error: "Refresh token expired or invalid" });
+    }
+
+    const { rows } = await request.server.db.query(
+      "SELECT id, username, email, role, status FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = rows[0];
+
+    if (!user || (user.status && user.status !== "active")) {
+      clearAuthCookie(reply);
+      clearRefreshCookie(reply);
+      return reply.status(401).send({ status: "error", error: "Account is not active" });
+    }
+
+    const token = await issueSession(request, reply, user);
+
+    return reply.status(200).send({
+      status: "success",
+      data: {
+        token,
+        user: { id: user.id, email: user.email, full_name: user.username, role: user.role },
+      },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({
+      status: "error",
+      message: "Internal server error during token refresh",
+    });
+  }
+}
+
+
 // ================= LOGOUT =================
-export async function logout(_request, reply) {
+export async function logout(request, reply) {
+  const refreshToken = request.cookies?.[REFRESH_COOKIE_NAME];
+  if (refreshToken) {
+    await revokeRefreshToken(request.server.redis, refreshToken).catch(() => {});
+  }
   clearAuthCookie(reply);
+  clearRefreshCookie(reply);
   return reply.status(200).send({ status: "success", message: "Logged out" });
 }

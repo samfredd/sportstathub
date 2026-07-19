@@ -5,7 +5,7 @@
  * service, then shape the response. No business logic lives here.
  */
 import config from '../../config/env.config.js';
-import { setAuthCookie } from '../../features/auth/controllers/auth.controller.js';
+import { issueSession } from '../../features/auth/controllers/auth.controller.js';
 
 export function createOAuthController(oauthService) {
 
@@ -28,13 +28,13 @@ export function createOAuthController(oauthService) {
       const { token } = await request.server.googleOAuth2
         .getAccessTokenFromAuthorizationCodeFlow(request, reply);
 
-      const { token: jwt } = await oauthService.handleGoogleCallback(
+      const { user } = await oauthService.handleGoogleCallback(
         token.access_token
       );
 
-      // Set the JWT as an httpOnly cookie instead of leaking it in the URL
-      // fragment (which lands in browser history / referrer / logs).
-      setAuthCookie(reply, jwt);
+      // Sets both the access and refresh cookies instead of leaking a token
+      // in the URL fragment (which lands in browser history / referrer / logs).
+      await issueSession(request, reply, user);
 
       const redirectUrl = new URL('/auth/oauth-callback', config.corsOrigin);
       return reply.redirect(redirectUrl.toString());

@@ -85,3 +85,60 @@ export async function logout() {
   }
   clearSession();
 }
+
+async function fetchMe(): Promise<SessionUser | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, { credentials: "include" });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json.data ?? json) as SessionUser;
+  } catch {
+    return null;
+  }
+}
+
+/** Silently exchange the refresh-token cookie for a new access-token cookie. */
+async function refreshAccessToken(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Re-validate the local "logged in" descriptor against the server.
+ *
+ * Without this, the localStorage descriptor has no TTL of its own: once the
+ * access-token cookie expires server-side, the UI (Navbar, bottom bar, etc.)
+ * would otherwise keep showing "signed in" forever, since nothing ever tells
+ * it to stop. This confirms the session is still good — silently renewing it
+ * via the refresh-token cookie first if the access token has expired — and
+ * clears the stale descriptor (flipping every "storage"-event listener to
+ * logged-out) only once both are confirmed gone.
+ *
+ * Call this periodically (see SessionSync) rather than on every render.
+ */
+export async function syncSession(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const current = getSessionUser();
+  if (!current) return; // nothing to sync if we don't think we're logged in
+
+  let me = await fetchMe();
+  if (!me) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) me = await fetchMe();
+  }
+
+  if (!me) {
+    clearSession();
+    return;
+  }
+
+  // Only touch storage (and clear the API cache / fire the storage event)
+  // when something actually changed — a no-op sync shouldn't wipe caches
+  // that other tabs/components are relying on every few minutes.
+  const changed = current.id !== me.id || current.role !== me.role || current.email !== me.email;
+  if (changed) setSessionUser(me);
+}

@@ -5,20 +5,22 @@
  *   1. Fetch the user's profile from Google's userinfo endpoint
  *   2. Normalize profile data
  *   3. Upsert the user via the repository
- *   4. Issue a JWT
  *
- * Does NOT touch Fastify, `reply`, or `request`. The access token is
- * passed in as a plain string so this function is independently testable.
+ * Does NOT touch Fastify, `reply`, or `request`, and does not issue any
+ * tokens itself — the controller does that via issueSession() so every login
+ * path (password, OTP, OAuth, admin) shares one place that sets both the
+ * access and refresh cookies. The access token is passed in as a plain string
+ * so this function is independently testable.
  */
 
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
-export function createOAuthService({ oauthRepository, helpers, jwt }) {
+export function createOAuthService({ oauthRepository, helpers }) {
 
   /**
    * Complete the Google OAuth login flow given a valid access token.
    *
-   * Returns { user, token } on success.
+   * Returns { user } on success.
    * Throws a plain Error on Google API failure or unexpected DB errors
    * (the controller treats all non-ServiceError throws as 500s).
    */
@@ -48,9 +50,7 @@ export function createOAuthService({ oauthRepository, helpers, jwt }) {
       throw Object.assign(new Error(`Account is ${user.status}`), { statusCode: 403 });
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role });
-
-    return { user: sanitizeUser(user), token };
+    return { user: sanitizeUser(user) };
   }
 
   return { handleGoogleCallback };

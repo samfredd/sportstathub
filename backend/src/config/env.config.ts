@@ -10,7 +10,14 @@ const config = {
   port: Number(process.env.PORT || 4000),
   secretKey: process.env.SECRET_KEY as string,
   databaseUrl: process.env.DATABASE_URL,
-  jwtExpiration: parseInt(process.env.JWT_EXPIRATION, 10) || 3600,
+  // Access token — kept short-lived since the refresh token below is what
+  // actually carries the session; a stolen/leaked access-token cookie is only
+  // useful for this window.
+  jwtExpiration: parseInt(process.env.JWT_EXPIRATION, 10) || 900, // 15 minutes
+
+  // Refresh token — long-lived, single-use (rotated on every /auth/refresh
+  // call), stored server-side in Redis so it can be revoked (logout, ban).
+  refreshTokenExpiration: parseInt(process.env.REFRESH_TOKEN_EXPIRATION, 10) || 60 * 60 * 24 * 30, // 30 days
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",
   logLevel: process.env.LOG_LEVEL || "info",
   host: process.env.HOST || "0.0.0.0",

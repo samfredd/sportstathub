@@ -51,7 +51,6 @@ async function oauthRoutes(fastify: any) {
   const oauthService    = createOAuthService({
     oauthRepository,
     helpers,
-    jwt: fastify.jwt,
   });
   const controller = createOAuthController(oauthService);
 

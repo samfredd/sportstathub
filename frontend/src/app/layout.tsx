@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Inter, Archivo } from "next/font/google";
+import SessionSync from "@/components/SessionSync";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,6 +41,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
+        <SessionSync />
         <a href="#main-content" className="skip-link">Skip to content</a>
         <main id="main-content" className="flex-1 w-full relative">
           {children}

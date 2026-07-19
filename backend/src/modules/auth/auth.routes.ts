@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { forgotPassword, login, logout, register, resetPassword, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
+import { forgotPassword, login, logout, refresh, register, resetPassword, verifyOTP } from '../../features/auth/controllers/auth.controller.js';
 import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, verifyOTPSchema } from './auth.schemas.js';
 import { registerAdmin } from '../../features/auth/controllers/auth.controller.js';
 
@@ -27,6 +27,7 @@ async function authRoutes(fastify) {
   fastify.post('/auth/forgot-password', { schema: forgotPasswordSchema, ...strictRateLimit }, forgotPassword);
   fastify.post('/auth/reset-password',  { schema: resetPasswordSchema,  ...authRateLimit   }, resetPassword);
   fastify.post('/auth/admin/register',  { schema: adminRegisterSchema,  ...strictRateLimit }, registerAdmin);
+  fastify.post('/auth/refresh',         { ...authRateLimit }, refresh);
   fastify.post('/auth/logout', logout);
 }
 
