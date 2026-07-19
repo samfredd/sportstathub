@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json tsconfig*.json ./
 RUN npm ci
 
-COPY server.ts migrate.ts ./
+COPY server.ts migrate.ts seed-admin.ts ./
 COPY src/ ./src/
 
 RUN npm run build
