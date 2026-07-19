@@ -11,7 +11,7 @@ Rotate any credential that has ever appeared in Git history. Merely replacing an
 1. Take a tested PostgreSQL backup and record the currently deployed immutable image SHA.
 2. Run secret scanning, production dependency audit, TypeScript typechecks/tests/builds, frontend lint/build, OddSwitch Ruff/tests, and Docker image builds.
 3. Apply migrations once with `cd backend && npm run migrate`. Migrations 015–021 are additive/backfilled and are safe to re-run.
-4. Deploy images pinned to the Git commit SHA. Do not use `latest` for a production release.
+4. Deploy images pinned to the Git commit SHA. Do not use `latest` for a production release. The workflow prunes stopped containers, unused images, and build cache before pulling; it never prunes persistent volumes.
 5. Require `GET /health/live` and `GET /health/ready` to succeed before routing traffic. Fetch `/openapi.json` as a contract smoke test.
 6. Smoke-test login/refresh/logout, admin MFA, public search, a premium access denial, and a sandbox Paystack verification. Verify payment and OddSwitch workers are consuming their queues.
 7. Watch error rate, payment reconciliation failures, webhook failures, AI quota pressure, SSE connections, and OddSwitch job failures during the rollout window.
